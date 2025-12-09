@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use ephemeral_rollups_sdk::anchor::{commit, delegate, ephemeral};
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
-use ephemeral_rollups_sdk::ephem::{commit_accounts, commit_and_undelegate_accounts};
+use ephemeral_rollups_sdk::ephem::{commit_accounts};
 
 declare_id!("CHhht9A6W95JYGm3AA1yH34n112uexmrpKqoSwKwfmxE");
 
@@ -57,6 +57,8 @@ pub mod magicplace {
         shard.shard_y = shard_y;
         // Packed storage: 2 pixels per byte (4-bit colors)
         shard.pixels = vec![0u8; BYTES_PER_SHARD];
+        shard.creator = ctx.accounts.authority.key();
+        shard.created_at = Clock::get()?.unix_timestamp;
         shard.bump = ctx.bumps.shard;
         
         msg!(
@@ -108,7 +110,6 @@ pub mod magicplace {
         if is_high_nibble {
             // Clear high nibble and set new color
             shard.pixels[byte_index] = (shard.pixels[byte_index] & 0x0F) | (color << 4);
-        } else {
             // Clear low nibble and set new color
             shard.pixels[byte_index] = (shard.pixels[byte_index] & 0xF0) | (color & 0x0F);
         }
@@ -121,6 +122,15 @@ pub mod magicplace {
             if is_high_nibble { "high" } else { "low" },
             color
         );
+
+        emit!(PixelChanged {
+            px,
+            py,
+            color,
+            painter: ctx.accounts.signer.key(),
+            timestamp: Clock::get()?.unix_timestamp,
+        });
+
         Ok(())
     }
 
@@ -158,6 +168,15 @@ pub mod magicplace {
         }
         
         msg!("Pixel ({}, {}) erased", px, py);
+
+        emit!(PixelChanged {
+            px,
+            py,
+            color: 0, // 0 = erased/transparent
+            painter: ctx.accounts.signer.key(),
+            timestamp: Clock::get()?.unix_timestamp,
+        });
+
         Ok(())
     }
 
@@ -230,22 +249,6 @@ pub mod magicplace {
             &ctx.accounts.magic_program,
         )?;
         msg!("Shard committed to base layer");
-        Ok(())
-    }
-
-    /// Undelegate shard from ER (commits and removes delegation)
-    pub fn undelegate_shard(
-        ctx: Context<CommitShardInput>, 
-        _shard_x: u16, 
-        _shard_y: u16
-    ) -> Result<()> {
-        commit_and_undelegate_accounts(
-            &ctx.accounts.payer,
-            vec![&ctx.accounts.shard.to_account_info()],
-            &ctx.accounts.magic_context,
-            &ctx.accounts.magic_program,
-        )?;
-        msg!("Shard undelegated from ER");
         Ok(())
     }
 }
@@ -337,6 +340,10 @@ pub struct PixelShard {
     /// Value = color_index (0 = unset/transparent, 1-15 = palette colors)
     #[max_len(8192)]
     pub pixels: Vec<u8>,
+    /// Creator of the shard (who paid for initialization)
+    pub creator: Pubkey,
+    /// Timestamp of creation
+    pub created_at: i64,
     /// PDA bump seed
     pub bump: u8,
 }
@@ -357,4 +364,17 @@ pub enum PixelError {
     InvalidColor,
     #[msg("Invalid authentication")]
     InvalidAuth,
+}
+
+// ========================================
+// Events
+// ========================================
+
+#[event]
+pub struct PixelChanged {
+    pub px: u32,
+    pub py: u32,
+    pub color: u8,
+    pub painter: Pubkey,
+    pub timestamp: i64,
 }
