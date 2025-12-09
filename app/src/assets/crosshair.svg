@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Corner brackets only -->
+  <!-- Top-left corner -->
+  <path d="M4 20 L4 4 L20 4" stroke="currentColor" stroke-width="4" stroke-linecap="square" fill="none"/>
+  <!-- Top-right corner -->
+  <path d="M44 4 L60 4 L60 20" stroke="currentColor" stroke-width="4" stroke-linecap="square" fill="none"/>
+  <!-- Bottom-right corner -->
+  <path d="M60 44 L60 60 L44 60" stroke="currentColor" stroke-width="4" stroke-linecap="square" fill="none"/>
+  <!-- Bottom-left corner -->
+  <path d="M20 60 L4 60 L4 44" stroke="currentColor" stroke-width="4" stroke-linecap="square" fill="none"/>
+</svg>

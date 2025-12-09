@@ -1,7 +1,13 @@
-{
-  "address": "49NcALUBrB68LN1QpgfHB4G4TP6UJuyb7EG9QuwxcTVy",
+/**
+ * Program IDL in camelCase format in order to be used in JS/TS.
+ *
+ * Note that this is only a type helper and is not the actual IDL. The original
+ * IDL can be found at `target/idl/magicplace.json`.
+ */
+export type Magicplace = {
+  "address": "CHhht9A6W95JYGm3AA1yH34n112uexmrpKqoSwKwfmxE",
   "metadata": {
-    "name": "counter",
+    "name": "magicplace",
     "version": "0.1.0",
     "spec": "0.1.0",
     "description": "Created with Anchor"
@@ -42,11 +48,11 @@
           }
         },
         {
-          "name": "magic_program",
+          "name": "magicProgram",
           "address": "Magic11111111111111111111111111111111111111"
         },
         {
-          "name": "magic_context",
+          "name": "magicContext",
           "writable": true,
           "address": "MagicContext1111111111111111111111111111111"
         }
@@ -77,7 +83,7 @@
               {
                 "kind": "account",
                 "path": "counter.authority",
-                "account": "Counter"
+                "account": "counter"
               }
             ]
           }
@@ -88,7 +94,7 @@
           "signer": true
         },
         {
-          "name": "session_token",
+          "name": "sessionToken",
           "optional": true
         }
       ],
@@ -117,7 +123,7 @@
           "signer": true
         },
         {
-          "name": "buffer_pda",
+          "name": "bufferPda",
           "writable": true,
           "pda": {
             "seeds": [
@@ -140,44 +146,44 @@
             "program": {
               "kind": "const",
               "value": [
-                46,
-                184,
-                35,
-                50,
-                78,
-                226,
+                167,
+                183,
+                223,
+                207,
+                199,
+                14,
+                206,
                 3,
-                191,
-                2,
-                246,
-                165,
-                73,
-                63,
-                200,
-                22,
-                153,
-                159,
-                179,
-                165,
-                246,
-                94,
-                59,
-                13,
-                158,
-                216,
-                187,
-                189,
-                105,
-                76,
-                41,
+                154,
+                170,
+                74,
+                197,
+                117,
+                125,
+                32,
+                89,
                 54,
-                96
+                49,
+                88,
+                141,
+                30,
+                85,
+                95,
+                170,
+                252,
+                208,
+                96,
+                129,
+                53,
+                227,
+                237,
+                67
               ]
             }
           }
         },
         {
-          "name": "delegation_record_pda",
+          "name": "delegationRecordPda",
           "writable": true,
           "pda": {
             "seeds": [
@@ -203,12 +209,12 @@
             ],
             "program": {
               "kind": "account",
-              "path": "delegation_program"
+              "path": "delegationProgram"
             }
           }
         },
         {
-          "name": "delegation_metadata_pda",
+          "name": "delegationMetadataPda",
           "writable": true,
           "pda": {
             "seeds": [
@@ -243,7 +249,7 @@
             ],
             "program": {
               "kind": "account",
-              "path": "delegation_program"
+              "path": "delegationProgram"
             }
           }
         },
@@ -260,15 +266,15 @@
           }
         },
         {
-          "name": "owner_program",
-          "address": "49NcALUBrB68LN1QpgfHB4G4TP6UJuyb7EG9QuwxcTVy"
+          "name": "ownerProgram",
+          "address": "CHhht9A6W95JYGm3AA1yH34n112uexmrpKqoSwKwfmxE"
         },
         {
-          "name": "delegation_program",
+          "name": "delegationProgram",
           "address": "DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh"
         },
         {
-          "name": "system_program",
+          "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         }
       ],
@@ -299,7 +305,7 @@
               {
                 "kind": "account",
                 "path": "counter.authority",
-                "account": "Counter"
+                "account": "counter"
               }
             ]
           }
@@ -310,7 +316,7 @@
           "signer": true
         },
         {
-          "name": "session_token",
+          "name": "sessionToken",
           "optional": true
         }
       ],
@@ -351,14 +357,14 @@
           "signer": true
         },
         {
-          "name": "system_program",
+          "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         }
       ],
       "args": []
     },
     {
-      "name": "process_undelegation",
+      "name": "processUndelegation",
       "discriminator": [
         196,
         28,
@@ -371,7 +377,7 @@
       ],
       "accounts": [
         {
-          "name": "base_account",
+          "name": "baseAccount",
           "writable": true
         },
         {
@@ -382,12 +388,12 @@
           "writable": true
         },
         {
-          "name": "system_program"
+          "name": "systemProgram"
         }
       ],
       "args": [
         {
-          "name": "account_seeds",
+          "name": "accountSeeds",
           "type": {
             "vec": "bytes"
           }
@@ -418,7 +424,7 @@
               {
                 "kind": "account",
                 "path": "counter.authority",
-                "account": "Counter"
+                "account": "counter"
               }
             ]
           }
@@ -429,7 +435,7 @@
           "signer": true
         },
         {
-          "name": "session_token",
+          "name": "sessionToken",
           "optional": true
         }
       ],
@@ -475,11 +481,11 @@
           }
         },
         {
-          "name": "magic_program",
+          "name": "magicProgram",
           "address": "Magic11111111111111111111111111111111111111"
         },
         {
-          "name": "magic_context",
+          "name": "magicContext",
           "writable": true,
           "address": "MagicContext1111111111111111111111111111111"
         }
@@ -489,7 +495,7 @@
   ],
   "accounts": [
     {
-      "name": "Counter",
+      "name": "counter",
       "discriminator": [
         255,
         176,
@@ -502,7 +508,7 @@
       ]
     },
     {
-      "name": "SessionToken",
+      "name": "sessionToken",
       "discriminator": [
         233,
         4,
@@ -518,18 +524,18 @@
   "errors": [
     {
       "code": 6000,
-      "name": "CounterUnderflow",
+      "name": "counterUnderflow",
       "msg": "Counter cannot go below zero"
     },
     {
       "code": 6001,
-      "name": "InvalidAuth",
+      "name": "invalidAuth",
       "msg": "Invalid authentication"
     }
   ],
   "types": [
     {
-      "name": "Counter",
+      "name": "counter",
       "type": {
         "kind": "struct",
         "fields": [
@@ -551,7 +557,7 @@
       }
     },
     {
-      "name": "SessionToken",
+      "name": "sessionToken",
       "type": {
         "kind": "struct",
         "fields": [
@@ -560,19 +566,19 @@
             "type": "pubkey"
           },
           {
-            "name": "target_program",
+            "name": "targetProgram",
             "type": "pubkey"
           },
           {
-            "name": "session_signer",
+            "name": "sessionSigner",
             "type": "pubkey"
           },
           {
-            "name": "valid_until",
+            "name": "validUntil",
             "type": "i64"
           }
         ]
       }
     }
   ]
-}
+};

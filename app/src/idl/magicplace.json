@@ -1,13 +1,7 @@
-/**
- * Program IDL in camelCase format in order to be used in JS/TS.
- *
- * Note that this is only a type helper and is not the actual IDL. The original
- * IDL can be found at `target/idl/counter.json`.
- */
-export type Counter = {
-  "address": "49NcALUBrB68LN1QpgfHB4G4TP6UJuyb7EG9QuwxcTVy",
+{
+  "address": "CHhht9A6W95JYGm3AA1yH34n112uexmrpKqoSwKwfmxE",
   "metadata": {
-    "name": "counter",
+    "name": "magicplace",
     "version": "0.1.0",
     "spec": "0.1.0",
     "description": "Created with Anchor"
@@ -48,11 +42,11 @@ export type Counter = {
           }
         },
         {
-          "name": "magicProgram",
+          "name": "magic_program",
           "address": "Magic11111111111111111111111111111111111111"
         },
         {
-          "name": "magicContext",
+          "name": "magic_context",
           "writable": true,
           "address": "MagicContext1111111111111111111111111111111"
         }
@@ -83,7 +77,7 @@ export type Counter = {
               {
                 "kind": "account",
                 "path": "counter.authority",
-                "account": "counter"
+                "account": "Counter"
               }
             ]
           }
@@ -94,7 +88,7 @@ export type Counter = {
           "signer": true
         },
         {
-          "name": "sessionToken",
+          "name": "session_token",
           "optional": true
         }
       ],
@@ -123,7 +117,7 @@ export type Counter = {
           "signer": true
         },
         {
-          "name": "bufferPda",
+          "name": "buffer_pda",
           "writable": true,
           "pda": {
             "seeds": [
@@ -146,44 +140,44 @@ export type Counter = {
             "program": {
               "kind": "const",
               "value": [
-                46,
-                184,
-                35,
-                50,
-                78,
-                226,
+                167,
+                183,
+                223,
+                207,
+                199,
+                14,
+                206,
                 3,
-                191,
-                2,
-                246,
-                165,
-                73,
-                63,
-                200,
-                22,
-                153,
-                159,
-                179,
-                165,
-                246,
-                94,
-                59,
-                13,
-                158,
-                216,
-                187,
-                189,
-                105,
-                76,
-                41,
+                154,
+                170,
+                74,
+                197,
+                117,
+                125,
+                32,
+                89,
                 54,
-                96
+                49,
+                88,
+                141,
+                30,
+                85,
+                95,
+                170,
+                252,
+                208,
+                96,
+                129,
+                53,
+                227,
+                237,
+                67
               ]
             }
           }
         },
         {
-          "name": "delegationRecordPda",
+          "name": "delegation_record_pda",
           "writable": true,
           "pda": {
             "seeds": [
@@ -209,12 +203,12 @@ export type Counter = {
             ],
             "program": {
               "kind": "account",
-              "path": "delegationProgram"
+              "path": "delegation_program"
             }
           }
         },
         {
-          "name": "delegationMetadataPda",
+          "name": "delegation_metadata_pda",
           "writable": true,
           "pda": {
             "seeds": [
@@ -249,7 +243,7 @@ export type Counter = {
             ],
             "program": {
               "kind": "account",
-              "path": "delegationProgram"
+              "path": "delegation_program"
             }
           }
         },
@@ -266,15 +260,15 @@ export type Counter = {
           }
         },
         {
-          "name": "ownerProgram",
-          "address": "49NcALUBrB68LN1QpgfHB4G4TP6UJuyb7EG9QuwxcTVy"
+          "name": "owner_program",
+          "address": "CHhht9A6W95JYGm3AA1yH34n112uexmrpKqoSwKwfmxE"
         },
         {
-          "name": "delegationProgram",
+          "name": "delegation_program",
           "address": "DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh"
         },
         {
-          "name": "systemProgram",
+          "name": "system_program",
           "address": "11111111111111111111111111111111"
         }
       ],
@@ -305,7 +299,7 @@ export type Counter = {
               {
                 "kind": "account",
                 "path": "counter.authority",
-                "account": "counter"
+                "account": "Counter"
               }
             ]
           }
@@ -316,7 +310,7 @@ export type Counter = {
           "signer": true
         },
         {
-          "name": "sessionToken",
+          "name": "session_token",
           "optional": true
         }
       ],
@@ -357,14 +351,14 @@ export type Counter = {
           "signer": true
         },
         {
-          "name": "systemProgram",
+          "name": "system_program",
           "address": "11111111111111111111111111111111"
         }
       ],
       "args": []
     },
     {
-      "name": "processUndelegation",
+      "name": "process_undelegation",
       "discriminator": [
         196,
         28,
@@ -377,7 +371,7 @@ export type Counter = {
       ],
       "accounts": [
         {
-          "name": "baseAccount",
+          "name": "base_account",
           "writable": true
         },
         {
@@ -388,12 +382,12 @@ export type Counter = {
           "writable": true
         },
         {
-          "name": "systemProgram"
+          "name": "system_program"
         }
       ],
       "args": [
         {
-          "name": "accountSeeds",
+          "name": "account_seeds",
           "type": {
             "vec": "bytes"
           }
@@ -424,7 +418,7 @@ export type Counter = {
               {
                 "kind": "account",
                 "path": "counter.authority",
-                "account": "counter"
+                "account": "Counter"
               }
             ]
           }
@@ -435,7 +429,7 @@ export type Counter = {
           "signer": true
         },
         {
-          "name": "sessionToken",
+          "name": "session_token",
           "optional": true
         }
       ],
@@ -481,11 +475,11 @@ export type Counter = {
           }
         },
         {
-          "name": "magicProgram",
+          "name": "magic_program",
           "address": "Magic11111111111111111111111111111111111111"
         },
         {
-          "name": "magicContext",
+          "name": "magic_context",
           "writable": true,
           "address": "MagicContext1111111111111111111111111111111"
         }
@@ -495,7 +489,7 @@ export type Counter = {
   ],
   "accounts": [
     {
-      "name": "counter",
+      "name": "Counter",
       "discriminator": [
         255,
         176,
@@ -508,7 +502,7 @@ export type Counter = {
       ]
     },
     {
-      "name": "sessionToken",
+      "name": "SessionToken",
       "discriminator": [
         233,
         4,
@@ -524,18 +518,18 @@ export type Counter = {
   "errors": [
     {
       "code": 6000,
-      "name": "counterUnderflow",
+      "name": "CounterUnderflow",
       "msg": "Counter cannot go below zero"
     },
     {
       "code": 6001,
-      "name": "invalidAuth",
+      "name": "InvalidAuth",
       "msg": "Invalid authentication"
     }
   ],
   "types": [
     {
-      "name": "counter",
+      "name": "Counter",
       "type": {
         "kind": "struct",
         "fields": [
@@ -557,7 +551,7 @@ export type Counter = {
       }
     },
     {
-      "name": "sessionToken",
+      "name": "SessionToken",
       "type": {
         "kind": "struct",
         "fields": [
@@ -566,19 +560,19 @@ export type Counter = {
             "type": "pubkey"
           },
           {
-            "name": "targetProgram",
+            "name": "target_program",
             "type": "pubkey"
           },
           {
-            "name": "sessionSigner",
+            "name": "session_signer",
             "type": "pubkey"
           },
           {
-            "name": "validUntil",
+            "name": "valid_until",
             "type": "i64"
           }
         ]
       }
     }
   ]
-};
+}

@@ -2,7 +2,7 @@ import * as anchor from "@coral-xyz/anchor";
 import { Program, web3 } from "@coral-xyz/anchor";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { expect } from "chai";
-import { Counter } from "../target/types/counter";
+import { Magicplace } from "../target/types/magicplace";
 import { GetCommitmentSignature } from "@magicblock-labs/ephemeral-rollups-sdk";
 
 describe("counter", () => {
@@ -32,7 +32,7 @@ describe("counter", () => {
   );
   console.log(`Current SOL Public Key: ${anchor.Wallet.local().publicKey}`);
 
-  const program = anchor.workspace.Counter as Program<Counter>;
+  const program = anchor.workspace.Counter as Program<Magicplace>;
   const authority = provider.wallet;
 
   // Derive PDA using user's public key
