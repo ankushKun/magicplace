@@ -1,4 +1,4 @@
 #!/bin/bash
 
 # run tests
-anchor deploy --provider.cluster localnet
+anchor deploy --provider.cluster devnet

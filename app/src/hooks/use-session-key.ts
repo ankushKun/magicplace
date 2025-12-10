@@ -42,6 +42,11 @@ export interface CreateSessionKeyOptions {
         authSignature: Uint8Array,
         authMessage: string
     ) => Promise<string>;
+    /**
+     * Optional callback after key is derived but before authorization.
+     * Return true to proceed with authorization, false to skip it (e.g. if already authorized).
+     */
+    onKeyDerived?: (keypair: import("@solana/web3.js").Keypair) => Promise<boolean>;
 }
 
 /**
@@ -163,8 +168,10 @@ export function useSessionKey() {
             const derivationSignatureBytes = new Uint8Array(Object.values(derivationSignature));
             const keypair = await deriveKeypairFromSignature(derivationSignatureBytes);
             
-            // Restore the auth signature
-            const authSignatureBytes = new Uint8Array(Object.values(authSignature));
+            // Restore the auth signature (may be null if steps were skipped)
+            const authSignatureBytes = authSignature 
+                ? new Uint8Array(Object.values(authSignature))
+                : null;
             
             setSessionState({
                 keypair,
@@ -195,6 +202,7 @@ export function useSessionKey() {
             duration = DEFAULT_SESSION_DURATION,
             salt = "default",
             onCreateAccount,
+            onKeyDerived,
         } = options;
 
         setIsLoading(true);
@@ -211,18 +219,28 @@ export function useSessionKey() {
             
             // Derive keypair from the first signature
             const keypair = await deriveKeypairFromSignature(derivationSignature);
-            
-            // SIGNATURE 2: Authorize this specific session key
-            // This proves the main wallet authorized THIS session key (not just any key)
-            const authMessage = generateAuthorizationMessage(keypair.publicKey, wallet.publicKey);
-            const authMessageBytes = new TextEncoder().encode(authMessage);
-            
-            // Request second signature from wallet (popup 2)
-            const authSignature = await wallet.signMessage(authMessageBytes);
-            
-            // STEP 3: Create on-chain session account (if callback provided)
-            if (onCreateAccount) {
-                await onCreateAccount(keypair, wallet.publicKey, authSignature, authMessage);
+
+            let authSignature: Uint8Array | null = null;
+            let proceed = true;
+
+            // Check if we should proceed with authorization
+            if (onKeyDerived) {
+                proceed = await onKeyDerived(keypair);
+            }
+
+            if (proceed) {
+                // SIGNATURE 2: Authorize this specific session key
+                // This proves the main wallet authorized THIS session key (not just any key)
+                const authMessage = generateAuthorizationMessage(keypair.publicKey, wallet.publicKey);
+                const authMessageBytes = new TextEncoder().encode(authMessage);
+                
+                // Request second signature from wallet (popup 2)
+                authSignature = await wallet.signMessage(authMessageBytes);
+                
+                // STEP 3: Create on-chain session account (if callback provided)
+                if (onCreateAccount) {
+                    await onCreateAccount(keypair, wallet.publicKey, authSignature, authMessage);
+                }
             }
             
             const now = Date.now();
@@ -232,7 +250,7 @@ export function useSessionKey() {
             const storageKey = getStorageKey(salt);
             localStorage.setItem(storageKey, JSON.stringify({
                 derivationSignature: Array.from(derivationSignature),
-                authSignature: Array.from(authSignature),
+                authSignature: authSignature ? Array.from(authSignature) : null,
                 createdAt: now,
                 expiresAt,
                 walletPubkey: wallet.publicKey.toBase58(),

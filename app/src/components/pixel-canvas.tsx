@@ -23,6 +23,8 @@ import { Eraser, Grid2X2Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { usePopSound } from '../hooks/use-pop-sound';
 import { useMagicplaceProgram } from '../hooks/use-magicplace-program';
+import { useReadonlyMode } from './start-using';
+import { useSessionBalance } from './session-balance-provider';
 
 // Icons as inline SVGs
 const PaintBrushIcon = () => (
@@ -195,7 +197,13 @@ export function PixelCanvas() {
     const [highlightShard, setHighlightShard] = useState<{ x: number; y: number } | null>(null);
 
     // Magicplace program hook for checking shard delegation status
-    const { checkShardDelegation } = useMagicplaceProgram();
+    const { checkShardDelegation, initializeShard, estimateShardUnlockCost } = useMagicplaceProgram();
+
+    // Readonly mode - hide interactions
+    const { isReadonly } = useReadonlyMode();
+
+    // Session balance for transaction checks
+    const { checkBalance, refreshBalance } = useSessionBalance();
 
     // Track which shards we're currently checking to avoid duplicate requests
     const checkingShards = useRef<Set<string>>(new Set());
@@ -316,27 +324,65 @@ export function PixelCanvas() {
     }, [unlockedShards]);
 
     // Handle shard unlock
-    const handleUnlockShard = useCallback((shardX: number, shardY: number) => {
+    const handleUnlockShard = useCallback(async (shardX: number, shardY: number) => {
         const shardKey = `${shardX},${shardY}`;
         
-        // Add to unlocked set
-        setUnlockedShards(prev => {
-            const newSet = new Set(prev);
-            newSet.add(shardKey);
-            return newSet;
-        });
-        
-        // Add to recent unlocked list
-        setRecentUnlockedShards(prev => {
-            const newShard = { x: shardX, y: shardY, timestamp: Date.now() };
-            // Remove if already exists, add to front
-            const filtered = prev.filter(s => !(s.x === shardX && s.y === shardY));
-            return [newShard, ...filtered].slice(0, 50); // Keep max 50
-        });
-        
-        // Play pop sound as feedback
-        playPop();
-    }, [playPop]);
+        try {
+            // Get accurate cost estimate based on current shard state
+            const costEstimate = await estimateShardUnlockCost(shardX, shardY);
+            
+            // If shard is already fully unlocked (delegated), nothing to do
+            if (costEstimate.total === 0) {
+                console.log(`Shard (${shardX}, ${shardY}) is already unlocked`);
+                setUnlockedShards(prev => {
+                    const newSet = new Set(prev);
+                    newSet.add(shardKey);
+                    return newSet;
+                });
+                return;
+            }
+            
+            // Check session balance first with accurate cost
+            const hasBalance = await checkBalance(
+                costEstimate.total, 
+                `Unlock shard (${shardX}, ${shardY}) - ${costEstimate.needsInit ? 'Init + ' : ''}Delegate`
+            );
+            if (!hasBalance) {
+                // Popup will be shown by the provider
+                return;
+            }
+
+            // Play pop sound as feedback
+            playPop();
+
+            // Initialize and delegate the shard
+            await initializeShard(shardX, shardY);
+            
+            // Refresh balance after transaction
+            refreshBalance();
+            
+            // Add to unlocked set
+            setUnlockedShards(prev => {
+                const newSet = new Set(prev);
+                newSet.add(shardKey);
+                return newSet;
+            });
+            
+            // Add to recent unlocked list
+            setRecentUnlockedShards(prev => {
+                const newShard = { x: shardX, y: shardY, timestamp: Date.now() };
+                // Remove if already exists, add to front
+                const filtered = prev.filter(s => !(s.x === shardX && s.y === shardY));
+                return [newShard, ...filtered].slice(0, 50); // Keep max 50
+            });
+            
+        } catch (err) {
+            console.error("Failed to unlock shard:", err);
+            // Show more informative error
+            const errorMessage = err instanceof Error ? err.message : "Failed to unlock shard";
+            alert(errorMessage);
+        }
+    }, [playPop, initializeShard, estimateShardUnlockCost, checkBalance, refreshBalance]);
 
     // Zoom to show a locked shard
     const zoomToLockedShard = useCallback((px: number, py: number) => {
@@ -469,10 +515,11 @@ export function PixelCanvas() {
                     visible={showShardGrid} 
                     onAggregatedChange={setShardsAggregated}
                     onVisibleShardsChange={setVisibleShards}
-                    alertShard={lockedShardAlert}
+                    alertShard={isReadonly ? null : lockedShardAlert}
                     unlockedShards={unlockedShards}
-                    onUnlockShard={handleUnlockShard}
+                    onUnlockShard={isReadonly ? undefined : handleUnlockShard}
                     highlightShard={highlightShard}
+                    hideLockedOverlay={isReadonly}
                 />
             </MapContainer>
 
@@ -747,8 +794,8 @@ export function PixelCanvas() {
                             </div>
                         </div>
 
-                        {/* Color Palette */}
-                        {isToolbarExpanded && (
+                        {/* Color Palette - hidden in readonly mode */}
+                        {isToolbarExpanded && !isReadonly && (
                             <div className="p-4">
                                 {/* Two rows of 16 colors each */}
                                 <div className="grid grid-cols-16 gap-1.5 mb-4">
@@ -761,29 +808,43 @@ export function PixelCanvas() {
                             </div>
                         )}
 
-                        {/* Paint Button */}
+                        {/* Paint Button or Readonly Message */}
                         <div className="px-4 pb-4">
-                            <button
-                                onClick={handlePlacePixel}
-                                disabled={!selectedPixel}
-                                className="w-full relative overflow-hidden bg-blue-500 hover:bg-blue-600 disabled:bg-slate-300 text-white font-semibold py-3 px-6 rounded-xl transition-all disabled:cursor-not-allowed shadow-lg hover:shadow-xl active:scale-[0.99]"
-                            >
-                                <div className="relative flex items-center justify-center gap-3">
-                                    <PaintBrushIcon />
-                                    <span>
-                                        {!selectedPixel ? 'Select a pixel' : 'Paint'}
+                            {isReadonly ? (
+                                <div className="text-center py-2 text-slate-500 text-sm">
+                                    <span className="inline-flex items-center gap-2">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                            <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/>
+                                            <circle cx="12" cy="12" r="3"/>
+                                        </svg>
+                                        View-only mode — connect wallet to paint
                                     </span>
                                 </div>
-                            </button>
+                            ) : (
+                                <>
+                                    <button
+                                        onClick={handlePlacePixel}
+                                        disabled={!selectedPixel}
+                                        className="w-full relative overflow-hidden bg-blue-500 hover:bg-blue-600 disabled:bg-slate-300 text-white font-semibold py-3 px-6 rounded-xl transition-all disabled:cursor-not-allowed shadow-lg hover:shadow-xl active:scale-[0.99]"
+                                    >
+                                        <div className="relative flex items-center justify-center gap-3">
+                                            <PaintBrushIcon />
+                                            <span>
+                                                {!selectedPixel ? 'Select a pixel' : 'Paint'}
+                                            </span>
+                                        </div>
+                                    </button>
 
-                            {/* Help text */}
-                            <div className="mt-2 text-center text-xs text-slate-400">
-                                {currentZoom >= PIXEL_SELECT_ZOOM ? (
-                                    <span className="text-emerald-500">Click to paint instantly!</span>
-                                ) : (
-                                    <span>Zoom in to paint on click</span>
-                                )}
-                            </div>
+                                    {/* Help text */}
+                                    <div className="mt-2 text-center text-xs text-slate-400">
+                                        {currentZoom >= PIXEL_SELECT_ZOOM ? (
+                                            <span className="text-emerald-500">Click to paint instantly!</span>
+                                        ) : (
+                                            <span>Zoom in to paint on click</span>
+                                        )}
+                                    </div>
+                                </>
+                            )}
                         </div>
                     </div>
                 </div>

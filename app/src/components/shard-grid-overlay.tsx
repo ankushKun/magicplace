@@ -13,6 +13,7 @@ interface ShardGridOverlayProps {
     unlockedShards?: Set<string>;
     onUnlockShard?: (shardX: number, shardY: number) => void;
     highlightShard?: { x: number; y: number } | null;
+    hideLockedOverlay?: boolean;
 }
 
 /**
@@ -21,7 +22,7 @@ interface ShardGridOverlayProps {
  * Hover detection (locked texture + icon) always works when zoomed in.
  * Grid lines/labels only show when visible=true.
  */
-export function ShardGridOverlay({ visible, onAggregatedChange, onVisibleShardsChange, alertShard, unlockedShards, onUnlockShard, highlightShard }: ShardGridOverlayProps) {
+export function ShardGridOverlay({ visible, onAggregatedChange, onVisibleShardsChange, alertShard, unlockedShards, onUnlockShard, highlightShard, hideLockedOverlay }: ShardGridOverlayProps) {
     const map = useLeafletMap();
     const gridLayerRef = useRef<L.LayerGroup | null>(null);
     const labelsLayerRef = useRef<L.LayerGroup | null>(null);
@@ -369,8 +370,8 @@ export function ShardGridOverlay({ visible, onAggregatedChange, onVisibleShardsC
                     hoverRect.on('mouseover', () => {
                         if (!hoverEffectLayerRef.current) return;
                         
-                        // Don't show locked overlay for unlocked shards
-                        if (isUnlocked) return;
+                        // Don't show locked overlay for unlocked shards or in readonly mode
+                        if (isUnlocked || hideLockedOverlay) return;
 
                         // Create locked texture overlay with 20% opacity
                         hoverOverlay = L.imageOverlay(lockedTexture, shardBounds, {
@@ -483,7 +484,7 @@ export function ShardGridOverlay({ visible, onAggregatedChange, onVisibleShardsC
             map.off('moveend', updateHoverZones);
             map.off('zoomend', updateHoverZones);
         };
-    }, [map, onAggregatedChange, onVisibleShardsChange, unlockedShards]);
+    }, [map, onAggregatedChange, onVisibleShardsChange, unlockedShards, hideLockedOverlay]);
 
     // Update visible grid lines and labels (only when visible=true)
     useEffect(() => {

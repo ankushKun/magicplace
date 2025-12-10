@@ -1,10 +1,11 @@
 import { useCallback, useMemo, useState } from "react";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { Program, AnchorProvider, setProvider } from "@coral-xyz/anchor";
-import { Connection, Keypair, PublicKey, Transaction, SystemProgram } from "@solana/web3.js";
+import { Connection, Keypair, PublicKey, Transaction, VersionedTransaction, SystemProgram, ComputeBudgetProgram } from "@solana/web3.js";
 import { type Magicplace } from "../idl/magicplace";
 import IDL from "../idl/magicplace.json";
 import { SHARD_DIMENSION, SHARDS_PER_DIM } from "../constants";
+import { useSessionKey } from "./use-session-key";
 
 // Note: @magicblock-labs/ephemeral-rollups-sdk is imported dynamically to avoid
 // Buffer not defined errors during module initialization
@@ -22,8 +23,11 @@ export interface PixelShardAccount {
 const ER_ENDPOINT = "https://devnet.magicblock.app";
 const ER_WS_ENDPOINT = "wss://devnet.magicblock.app";
 
+// Priority fee for base layer transactions (MicroLamports)
+const PRIORITY_FEE_MICRO_LAMPORTS = 200_000;
+
 // Delegation status
-export type DelegationStatus = "undelegated" | "delegated" | "checking";
+export type DelegationStatus = "undelegated" | "delegated" | "not-initialized" | "checking";
 
 // Seed prefix for shard PDAs (must match contract: b"shard")
 const SHARD_SEED = Buffer.from("shard");
@@ -33,6 +37,13 @@ const SESSION_SEED = Buffer.from("session");
 
 // Delegation Program ID
 const DELEGATION_PROGRAM_ID = new PublicKey("DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh");
+
+// Cost estimation constants (in SOL)
+// Shard account: 8 + 2 + 2 + 8192 + 32 + 1 = 8237 bytes  
+// Rent-exempt minimum for ~8.3KB = ~0.058 SOL (at 6.96 lamports/byte)
+export const SHARD_RENT_SOL = 0.06;  // Slightly rounded up for safety
+export const TX_FEE_SOL = 0.0005;    // ~5000 lamports per transaction with priority fee
+export const DELEGATION_TX_FEE_SOL = 0.001; // Delegation CPI is more expensive
 
 /**
  * Derive the PDA for a shard at (shardX, shardY)
@@ -79,11 +90,12 @@ export function deriveSessionPDA(mainWallet: PublicKey): PublicKey {
 export function useMagicplaceProgram() {
     const { connection } = useConnection();
     const wallet = useWallet();
+    const { sessionKey, isActive: sessionActive } = useSessionKey();
 
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    // Base layer Anchor provider and program
+    // Base layer Anchor provider and program (uses main wallet - for setup only)
     const program = useMemo(() => {
         if (!wallet.publicKey || !wallet.signTransaction || !wallet.signAllTransactions) {
             return null;
@@ -104,7 +116,40 @@ export function useMagicplaceProgram() {
         return new Program<Magicplace>(IDL as Magicplace, provider);
     }, [connection, wallet.publicKey, wallet.signTransaction, wallet.signAllTransactions]);
 
-    // Ephemeral Rollup connection and provider
+    // Session-based program for base layer (uses session keypair for signing)
+    const sessionProgram = useMemo(() => {
+        if (!sessionKey.keypair) {
+            return null;
+        }
+
+        const keypair = sessionKey.keypair;
+        const provider = new AnchorProvider(
+            connection,
+            {
+                publicKey: keypair.publicKey,
+                signTransaction: async <T extends Transaction | VersionedTransaction>(tx: T): Promise<T> => {
+                    if (tx instanceof Transaction) {
+                        tx.partialSign(keypair);
+                    }
+                    // VersionedTransaction would need different handling, but Anchor uses Transaction
+                    return tx;
+                },
+                signAllTransactions: async <T extends Transaction | VersionedTransaction>(txs: T[]): Promise<T[]> => {
+                    txs.forEach(tx => {
+                        if (tx instanceof Transaction) {
+                            tx.partialSign(keypair);
+                        }
+                    });
+                    return txs;
+                },
+            },
+            { commitment: "confirmed" }
+        );
+
+        return new Program<Magicplace>(IDL as Magicplace, provider);
+    }, [connection, sessionKey.keypair]);
+
+    // Ephemeral Rollup connection
     const erConnection = useMemo(() => {
         return new Connection(ER_ENDPOINT, {
             wsEndpoint: ER_WS_ENDPOINT,
@@ -112,6 +157,7 @@ export function useMagicplaceProgram() {
         });
     }, []);
 
+    // ER provider using main wallet (for setup only)
     const erProvider = useMemo(() => {
         if (!wallet.publicKey || !wallet.signTransaction || !wallet.signAllTransactions) {
             return null;
@@ -128,6 +174,36 @@ export function useMagicplaceProgram() {
         );
     }, [erConnection, wallet.publicKey, wallet.signTransaction, wallet.signAllTransactions]);
 
+    // Session-based ER provider (uses session keypair for signing)
+    const sessionErProvider = useMemo(() => {
+        if (!sessionKey.keypair) {
+            return null;
+        }
+
+        const keypair = sessionKey.keypair;
+        return new AnchorProvider(
+            erConnection,
+            {
+                publicKey: keypair.publicKey,
+                signTransaction: async <T extends Transaction | VersionedTransaction>(tx: T): Promise<T> => {
+                    if (tx instanceof Transaction) {
+                        tx.partialSign(keypair);
+                    }
+                    return tx;
+                },
+                signAllTransactions: async <T extends Transaction | VersionedTransaction>(txs: T[]): Promise<T[]> => {
+                    txs.forEach(tx => {
+                        if (tx instanceof Transaction) {
+                            tx.partialSign(keypair);
+                        }
+                    });
+                    return txs;
+                },
+            },
+            { commitment: "confirmed" }
+        );
+    }, [erConnection, sessionKey.keypair]);
+
     const erProgram = useMemo(() => {
         if (!erProvider) {
             return null;
@@ -135,6 +211,14 @@ export function useMagicplaceProgram() {
 
         return new Program<Magicplace>(IDL as Magicplace, erProvider);
     }, [erProvider]);
+
+    const sessionErProgram = useMemo(() => {
+        if (!sessionErProvider) {
+            return null;
+        }
+
+        return new Program<Magicplace>(IDL as Magicplace, sessionErProvider);
+    }, [sessionErProvider]);
 
     // ========================================
     // Shard Query Functions
@@ -164,25 +248,67 @@ export function useMagicplaceProgram() {
     }, [program]);
 
     /**
-     * Check if a shard is delegated to Ephemeral Rollups
+     * Check shard availability and delegation status.
+     * Checks in order:
+     * 1. MagicBlock ER endpoint - if found, shard is delegated and ready for fast transactions
+     * 2. Base Solana layer - if found, shard exists but needs delegation
+     * 3. Not found anywhere - shard needs to be initialized
+     * 
+     * Returns: "delegated" | "undelegated" | "not-initialized"
      */
     const checkShardDelegation = useCallback(async (shardX: number, shardY: number): Promise<DelegationStatus> => {
         const shardPDA = deriveShardPDA(shardX, shardY);
         
         try {
-            const accountInfo = await connection.getAccountInfo(shardPDA);
-            
-            if (!accountInfo) {
-                return "undelegated"; // Account doesn't exist
+            // Step 1: Check MagicBlock ER endpoint first (fastest path for active shards)
+            try {
+                const erAccountInfo = await erConnection.getAccountInfo(shardPDA);
+                if (erAccountInfo && erAccountInfo.data.length > 0) {
+                    console.debug(`Shard (${shardX}, ${shardY}) found on ER - delegated`);
+                    return "delegated";
+                }
+            } catch (erErr) {
+                // ER might be unavailable or account not found, continue to base layer check
+                console.debug(`ER check failed for shard (${shardX}, ${shardY}), checking base layer...`);
             }
 
-            // Check if the account owner is the delegation program
-            return accountInfo.owner.equals(DELEGATION_PROGRAM_ID) ? "delegated" : "undelegated";
-        } catch (err) {
-            console.error("Error checking shard delegation:", err);
+            // Step 2: Check base Solana layer
+            // Force "confirmed" commitment to ensure we see latest state
+            const baseAccountInfo = await connection.getAccountInfo(shardPDA, "confirmed");
+            
+            if (!baseAccountInfo) {
+                console.log(`Shard (${shardX}, ${shardY}) not found on base layer - needs initialization`);
+                return "not-initialized";
+            }
+
+            // Account exists on base layer
+            // Check if it's currently delegated (owned by delegation program)
+            // Use strict string comparison for safety
+            const ownerStr = baseAccountInfo.owner.toBase58();
+            const delegationProgramStr = DELEGATION_PROGRAM_ID.toBase58();
+            const isDelegatedOwner = ownerStr === delegationProgramStr;
+            
+            console.log(`Debug checkShardDelegation (${shardX}, ${shardY}):`, {
+                exists: true,
+                owner: ownerStr,
+                expectedOwner: delegationProgramStr,
+                match: isDelegatedOwner
+            });
+
+            if (isDelegatedOwner) {
+                console.log(`Shard (${shardX}, ${shardY}) is delegated (base layer check)`);
+                return "delegated";
+            }
+
+            // Account exists but is not delegated
+            console.log(`Shard (${shardX}, ${shardY}) exists but not delegated. Owner: ${ownerStr}`);
             return "undelegated";
+        } catch (err) {
+            console.error("Error checking shard status:", err);
+            // Default to not-initialized to allow retry
+            return "not-initialized";
         }
-    }, [connection]);
+    }, [connection, erConnection]);
 
     /**
      * Fetch a shard from Ephemeral Rollups (when delegated)
@@ -210,46 +336,7 @@ export function useMagicplaceProgram() {
     // Shard Management Functions
     // ========================================
 
-    /**
-     * Initialize a shard at (shardX, shardY) and automatically delegate to ER
-     * Shards are created on-demand when a user wants to paint in that region.
-     * After initialization, the shard is automatically delegated to Ephemeral Rollups
-     * for fast, low-cost pixel placement transactions.
-     */
-    const initializeShard = useCallback(async (shardX: number, shardY: number): Promise<string> => {
-        if (!program || !wallet.publicKey) {
-            throw new Error("Wallet not connected");
-        }
 
-        if (shardX < 0 || shardX >= SHARDS_PER_DIM || shardY < 0 || shardY >= SHARDS_PER_DIM) {
-            throw new Error(`Invalid shard coordinates: (${shardX}, ${shardY}). Must be 0-${SHARDS_PER_DIM - 1}`);
-        }
-
-        setIsLoading(true);
-        setError(null);
-
-        try {
-            const tx = await program.methods
-                .initializeShard(shardX, shardY)
-                .accounts({
-                    authority: wallet.publicKey,
-                })
-                .rpc({
-                    skipPreflight: true, // Required for delegation CPI
-                });
-
-            // Wait for delegation to propagate to ER
-            await new Promise(resolve => setTimeout(resolve, 2000));
-
-            return tx;
-        } catch (err) {
-            const message = err instanceof Error ? err.message : "Failed to initialize shard";
-            setError(message);
-            throw err;
-        } finally {
-            setIsLoading(false);
-        }
-    }, [program, wallet.publicKey]);
 
     /**
      * Initialize a user session account on-chain.
@@ -294,16 +381,23 @@ export function useMagicplaceProgram() {
                 .initializeUser(mainWallet, Array.from(authSignature) as number[])
                 .accounts({
                     authority: sessionKeypair.publicKey,
-                    instructionsSysvar: SYSVAR_INSTRUCTIONS_PUBKEY,
+                    // instructionsSysvar: SYSVAR_INSTRUCTIONS_PUBKEY,
                 })
                 .instruction();
+                
+            // Add priority fee
+            const priorityFeeIx = ComputeBudgetProgram.setComputeUnitPrice({
+                microLamports: PRIORITY_FEE_MICRO_LAMPORTS,
+            });
             
             // Create transaction with Ed25519 verify as first instruction
-            const tx = new Transaction().add(ed25519Ix, programIx);
+            // Priority fee is added last to keep Ed25519 at index 0 
+            const tx = new Transaction().add(ed25519Ix, programIx, priorityFeeIx);
             
             // Set up transaction
             tx.feePayer = sessionKeypair.publicKey;
-            tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+            const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+            tx.recentBlockhash = blockhash;
 
             // Sign with session keypair
             tx.sign(sessionKeypair);
@@ -312,7 +406,7 @@ export function useMagicplaceProgram() {
             const signature = await connection.sendRawTransaction(tx.serialize(), {
                 skipPreflight: true, // Required for Ed25519 instruction
             });
-            await connection.confirmTransaction(signature, "confirmed");
+            await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, "confirmed");
 
             return signature;
         } catch (err) {
@@ -343,17 +437,24 @@ export function useMagicplaceProgram() {
         setError(null);
 
         try {
+            // Priority fee instruction
+            const priorityFeeIx = ComputeBudgetProgram.setComputeUnitPrice({
+                microLamports: PRIORITY_FEE_MICRO_LAMPORTS,
+            });
+
             // Build the delegation transaction
             const tx = await program.methods
                 .delegateUser(mainWallet)
                 .accounts({
                     authority: sessionKeypair.publicKey,
                 })
+                .preInstructions([priorityFeeIx])
                 .transaction();
 
             // Set up transaction
             tx.feePayer = sessionKeypair.publicKey;
-            tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+            const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+            tx.recentBlockhash = blockhash;
 
             // Sign with session keypair
             tx.sign(sessionKeypair);
@@ -362,7 +463,7 @@ export function useMagicplaceProgram() {
             const signature = await connection.sendRawTransaction(tx.serialize(), {
                 skipPreflight: true, // Required for delegation CPI
             });
-            await connection.confirmTransaction(signature, "confirmed");
+            await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, "confirmed");
 
             return signature;
         } catch (err) {
@@ -373,6 +474,28 @@ export function useMagicplaceProgram() {
             setIsLoading(false);
         }
     }, [program, connection]);
+
+    /**
+     * Check if a user session account is delegated to Ephemeral Rollups
+     */
+    const checkUserDelegation = useCallback(async (mainWallet: PublicKey): Promise<DelegationStatus> => {
+        const sessionPDA = deriveSessionPDA(mainWallet);
+        
+        try {
+            const accountInfo = await connection.getAccountInfo(sessionPDA);
+            
+            if (!accountInfo) {
+                throw new Error("Account not found"); // Explicitly throw so checking logic knows it's not initialized
+            }
+
+            // Check if the account owner is the delegation program
+            return accountInfo.owner.equals(DELEGATION_PROGRAM_ID) ? "delegated" : "undelegated";
+        } catch (err) {
+            // Rethrow or handle specific errors as needed.
+            // For now, if getAccountInfo failed or we threw "Account not found", bubble up.
+            throw err;
+        }
+    }, [connection]);
 
     // ========================================
     // Pixel Placement Functions
@@ -451,10 +574,11 @@ export function useMagicplaceProgram() {
 
     /**
      * Place a pixel on Ephemeral Rollups (when shard is delegated)
+     * Uses session key for signing - no wallet popup needed
      */
     const placePixelOnER = useCallback(async (px: number, py: number, color: number): Promise<string> => {
-        if (!program || !erProvider || !wallet.publicKey) {
-            throw new Error("Wallet not connected or ER not available");
+        if (!sessionProgram || !sessionKey.keypair) {
+            throw new Error("Session program or key not available");
         }
 
         if (color < 1 || color > 15) {
@@ -467,18 +591,20 @@ export function useMagicplaceProgram() {
         setError(null);
 
         try {
-            // Build transaction using base program
-            let tx = await program.methods
+            // Build instruction using session program for IDL
+            const placeIx = await sessionProgram.methods
                 .placePixel(shardX, shardY, px, py, color)
                 .accounts({
-                    signer: wallet.publicKey,
+                    signer: sessionKey.keypair.publicKey,
                 })
-                .transaction();
+                .instruction();
 
-            // Set up for ER connection
-            tx.feePayer = wallet.publicKey;
+            const tx = new Transaction().add(placeIx);
+
+            // Set up for ER connection with session key
+            tx.feePayer = sessionKey.keypair.publicKey;
             tx.recentBlockhash = (await erConnection.getLatestBlockhash()).blockhash;
-            tx = await erProvider.wallet.signTransaction(tx);
+            tx.sign(sessionKey.keypair);
 
             // Send using raw connection
             const txHash = await erConnection.sendRawTransaction(tx.serialize(), {
@@ -494,14 +620,15 @@ export function useMagicplaceProgram() {
         } finally {
             setIsLoading(false);
         }
-    }, [program, erProvider, erConnection, wallet.publicKey]);
+    }, [sessionProgram, sessionKey.keypair, erConnection]);
 
     /**
      * Erase a pixel on Ephemeral Rollups (when shard is delegated)
+     * Uses session key for signing - no wallet popup needed
      */
     const erasePixelOnER = useCallback(async (px: number, py: number): Promise<string> => {
-        if (!program || !erProvider || !wallet.publicKey) {
-            throw new Error("Wallet not connected or ER not available");
+        if (!sessionProgram || !sessionKey.keypair) {
+            throw new Error("Session program or key not available");
         }
 
         const { shardX, shardY } = getShardForPixel(px, py);
@@ -510,18 +637,20 @@ export function useMagicplaceProgram() {
         setError(null);
 
         try {
-            // Build transaction using base program
-            let tx = await program.methods
+            // Build instruction using session program for IDL
+            const eraseIx = await sessionProgram.methods
                 .erasePixel(shardX, shardY, px, py)
                 .accounts({
-                    signer: wallet.publicKey,
+                    signer: sessionKey.keypair.publicKey,
                 })
-                .transaction();
+                .instruction();
 
-            // Set up for ER connection
-            tx.feePayer = wallet.publicKey;
+            const tx = new Transaction().add(eraseIx);
+
+            // Set up for ER connection with session key
+            tx.feePayer = sessionKey.keypair.publicKey;
             tx.recentBlockhash = (await erConnection.getLatestBlockhash()).blockhash;
-            tx = await erProvider.wallet.signTransaction(tx);
+            tx.sign(sessionKey.keypair);
 
             // Send using raw connection
             const txHash = await erConnection.sendRawTransaction(tx.serialize(), {
@@ -537,51 +666,289 @@ export function useMagicplaceProgram() {
         } finally {
             setIsLoading(false);
         }
-    }, [program, erProvider, erConnection, wallet.publicKey]);
+    }, [sessionProgram, sessionKey.keypair, erConnection]);
 
     // ========================================
     // Ephemeral Rollups Shard Functions
     // ========================================
 
-    // /**
-    //  * Delegate a shard to Ephemeral Rollups for fast transactions
-    //  * NOTE: This is typically not needed as initializeShard automatically delegates.
-    //  * Use this only if a shard needs to be re-delegated after undelegation.
-    //  */
-    // const delegateShard = useCallback(async (shardX: number, shardY: number): Promise<string> => {
-    //     if (!program || !wallet.publicKey) {
-    //         throw new Error("Wallet not connected");
-    //     }
+    /**
+     * Delegate a shard to Ephemeral Rollups for fast transactions
+     */
+    const delegateShard = useCallback(async (shardX: number, shardY: number): Promise<string> => {
+        if (!program || !wallet.publicKey) {
+            throw new Error("Wallet not connected");
+        }
 
-    //     if (shardX < 0 || shardX >= SHARDS_PER_DIM || shardY < 0 || shardY >= SHARDS_PER_DIM) {
-    //         throw new Error(`Invalid shard coordinates: (${shardX}, ${shardY}). Must be 0-${SHARDS_PER_DIM - 1}`);
-    //     }
+        if (shardX < 0 || shardX >= SHARDS_PER_DIM || shardY < 0 || shardY >= SHARDS_PER_DIM) {
+            throw new Error(`Invalid shard coordinates: (${shardX}, ${shardY}). Must be 0-${SHARDS_PER_DIM - 1}`);
+        }
 
-    //     setIsLoading(true);
-    //     setError(null);
+        setIsLoading(true);
+        setError(null);
 
-    //     try {
-    //         const tx = await program.methods
-    //             .delegateShard(shardX, shardY)
-    //             .accounts({
-    //                 payer: wallet.publicKey,
-    //             })
-    //             .rpc({
-    //                 skipPreflight: true,
-    //             });
+        try {
+            const priorityFeeIx = ComputeBudgetProgram.setComputeUnitPrice({
+                microLamports: PRIORITY_FEE_MICRO_LAMPORTS,
+            });
 
-    //         // Wait for delegation to propagate
-    //         await new Promise(resolve => setTimeout(resolve, 2000));
+            // MagicBlock devnet validator
+            const DEVNET_VALIDATOR = new PublicKey("MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57");
 
-    //         return tx;
-    //     } catch (err) {
-    //         const message = err instanceof Error ? err.message : "Failed to delegate shard";
-    //         setError(message);
-    //         throw err;
-    //     } finally {
-    //         setIsLoading(false);
-    //     }
-    // }, [program, wallet.publicKey]);
+            const tx = await program.methods
+                .delegateShard(shardX, shardY)
+                .accounts({
+                    authority: wallet.publicKey,
+                })
+                .remainingAccounts([
+                    { pubkey: DEVNET_VALIDATOR, isSigner: false, isWritable: false }
+                ])
+                .preInstructions([priorityFeeIx])
+                .rpc({
+                    skipPreflight: true,
+                });
+
+            return tx;
+        } catch (err) {
+            const message = err instanceof Error ? err.message : "Failed to delegate shard";
+            setError(message);
+            throw err;
+        } finally {
+            setIsLoading(false);
+        }
+    }, [program, wallet.publicKey]);
+
+    /**
+     * Delegate a shard using session key (no wallet popup needed)
+     */
+    const delegateShardWithSession = useCallback(async (shardX: number, shardY: number): Promise<string> => {
+        if (!sessionProgram || !sessionKey.keypair) {
+            throw new Error("Session program or key not available");
+        }
+
+        if (shardX < 0 || shardX >= SHARDS_PER_DIM || shardY < 0 || shardY >= SHARDS_PER_DIM) {
+            throw new Error(`Invalid shard coordinates: (${shardX}, ${shardY}). Must be 0-${SHARDS_PER_DIM - 1}`);
+        }
+
+        setIsLoading(true);
+        setError(null);
+
+        try {
+            const priorityFeeIx = ComputeBudgetProgram.setComputeUnitPrice({
+                microLamports: PRIORITY_FEE_MICRO_LAMPORTS,
+            });
+
+            // MagicBlock devnet validators - use Asia region by default
+            // Asia: MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57
+            // EU: MEUGGrYPxKk17hCr7wpT6s8dtNokZj5U2L57vjYMS8e
+            const DEVNET_VALIDATOR = new PublicKey("MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57");
+            
+            // Build instruction using session program, sign with session key
+            const delegateIx = await sessionProgram.methods
+                .delegateShard(shardX, shardY)
+                .accounts({
+                    authority: sessionKey.keypair.publicKey,
+                })
+                .remainingAccounts([
+                    { pubkey: DEVNET_VALIDATOR, isSigner: false, isWritable: false }
+                ])
+                .instruction();
+
+            const tx = new Transaction()
+                .add(priorityFeeIx)
+                .add(delegateIx);
+
+            tx.feePayer = sessionKey.keypair.publicKey;
+            const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+            tx.recentBlockhash = blockhash;
+            tx.sign(sessionKey.keypair);
+
+            const txSig = await connection.sendRawTransaction(tx.serialize(), {
+                skipPreflight: true,
+            });
+            
+            const confirmation = await connection.confirmTransaction(
+                { signature: txSig, blockhash, lastValidBlockHeight },
+                "confirmed"
+            );
+            
+            // Check if transaction actually succeeded
+            if (confirmation.value.err) {
+                console.error("Delegate shard transaction failed:", confirmation.value.err);
+                throw new Error(`Delegation failed: ${JSON.stringify(confirmation.value.err)}`);
+            }
+
+            return txSig;
+        } catch (err) {
+            const message = err instanceof Error ? err.message : "Failed to delegate shard";
+            setError(message);
+            throw err;
+        } finally {
+            setIsLoading(false);
+        }
+    }, [connection, sessionProgram, sessionKey.keypair]);
+
+    /**
+     * Initialize a shard at (shardX, shardY) and automatically delegate to ER
+     * Shards are created on-demand when a user wants to paint in that region.
+     * After initialization, the shard is automatically delegated to Ephemeral Rollups
+     * for fast, low-cost pixel placement transactions.
+     */
+    const initializeShard = useCallback(async (shardX: number, shardY: number): Promise<string> => {
+        if (!program || !sessionKey.keypair) {
+            throw new Error("Program or session key not available");
+        }
+
+        if (shardX < 0 || shardX >= SHARDS_PER_DIM || shardY < 0 || shardY >= SHARDS_PER_DIM) {
+            throw new Error(`Invalid shard coordinates: (${shardX}, ${shardY}). Must be 0-${SHARDS_PER_DIM - 1}`);
+        }
+
+        setIsLoading(true);
+        setError(null);
+
+        try {
+            const shardPDA = deriveShardPDA(shardX, shardY);
+            
+            // Step 1: Check if shard account exists
+            const accountInfo = await connection.getAccountInfo(shardPDA);
+            const shardExists = accountInfo !== null;
+            
+            // Step 2: Check delegation status if shard exists
+            let isDelegated = false;
+            if (shardExists) {
+                isDelegated = accountInfo.owner.equals(DELEGATION_PROGRAM_ID);
+                console.log(`Shard (${shardX}, ${shardY}) exists. Delegated: ${isDelegated}`);
+            } else {
+                console.log(`Shard (${shardX}, ${shardY}) does not exist, will initialize.`);
+            }
+
+            // Step 2.5: Calculate required balance and check before proceeding
+            let requiredBalance = 0;
+            if (!shardExists) {
+                // Need to pay for shard account rent + init tx fee
+                requiredBalance += SHARD_RENT_SOL + TX_FEE_SOL;
+            }
+            if (!isDelegated) {
+                // Need to pay for delegation tx fee
+                requiredBalance += DELEGATION_TX_FEE_SOL;
+            }
+
+            if (requiredBalance > 0) {
+                // Check session key balance
+                const sessionBalance = await connection.getBalance(sessionKey.keypair.publicKey);
+                const sessionBalanceSOL = sessionBalance / 1e9; // Convert lamports to SOL
+                
+                if (sessionBalanceSOL < requiredBalance) {
+                    const shortfall = requiredBalance - sessionBalanceSOL;
+                    throw new Error(
+                        `Insufficient session balance. Need ${requiredBalance.toFixed(4)} SOL but have ${sessionBalanceSOL.toFixed(4)} SOL. ` +
+                        `Please top up at least ${shortfall.toFixed(4)} SOL to your session key.`
+                    );
+                }
+                
+                console.log(`Balance check passed: have ${sessionBalanceSOL.toFixed(4)} SOL, need ${requiredBalance.toFixed(4)} SOL`);
+            }
+
+            // Step 3: Initialize if needed
+            if (!shardExists) {
+                if (!sessionProgram) {
+                    throw new Error("Session program not initialized");
+                }
+                
+                console.log(`Initializing shard (${shardX}, ${shardY})...`);
+                const priorityFeeIx = ComputeBudgetProgram.setComputeUnitPrice({
+                    microLamports: PRIORITY_FEE_MICRO_LAMPORTS,
+                });
+
+                // Build transaction manually using session program (for IDL) 
+                // and sign with session key
+                const initIx = await sessionProgram.methods
+                    .initializeShard(shardX, shardY)
+                    .accounts({
+                        authority: sessionKey.keypair.publicKey,
+                    })
+                    .instruction();
+
+                const tx = new Transaction()
+                    .add(priorityFeeIx)
+                    .add(initIx);
+
+                tx.feePayer = sessionKey.keypair.publicKey;
+                const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+                tx.recentBlockhash = blockhash;
+                tx.sign(sessionKey.keypair);
+
+                const initTxSig = await connection.sendRawTransaction(tx.serialize(), {
+                    skipPreflight: true,
+                });
+                
+                // Wait for confirmation
+                const confirmation = await connection.confirmTransaction(
+                    { signature: initTxSig, blockhash, lastValidBlockHeight },
+                    "confirmed"
+                );
+                
+                // Check if transaction actually succeeded (not just included in block)
+                if (confirmation.value.err) {
+                    console.error("Initialize shard transaction failed:", confirmation.value.err);
+                    throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
+                }
+                
+                console.log("Initialized shard:", initTxSig);
+                
+                // After initialization, check again
+                const newAccountInfo = await connection.getAccountInfo(shardPDA);
+                if (newAccountInfo) {
+                    isDelegated = newAccountInfo.owner.equals(DELEGATION_PROGRAM_ID);
+                } else {
+                    // Account still doesn't exist - something went wrong
+                    throw new Error("Shard account not created after initialization");
+                }
+                
+                // Wait for the account state to settle before delegation
+                // Devnet can have propagation delays
+                console.log("Waiting for shard account to settle...");
+                await new Promise(resolve => setTimeout(resolve, 3000));
+            }
+
+            // Step 4: Delegate if not already delegated
+            if (!isDelegated) {
+                console.log(`Delegating shard (${shardX}, ${shardY})...`);
+                
+                try {
+                    const delegateTx = await delegateShardWithSession(shardX, shardY);
+                    console.log("Delegated shard:", delegateTx);
+                    
+                    // Wait for delegation to propagate to ER
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    
+                    return delegateTx;
+                } catch (delegateErr) {
+                    // Check if this is a stuck delegation state (InvalidAccountOwner on delegation_record)
+                    const errStr = delegateErr instanceof Error ? delegateErr.message : String(delegateErr);
+                    if (errStr.includes("InvalidAccountOwner")) {
+                        // This can happen if a previous delegation partially failed
+                        // The delegation records exist but the shard isn't delegated
+                        console.error("Delegation failed - shard may be in a stuck state from a previous attempt");
+                        throw new Error(
+                            `This shard (${shardX}, ${shardY}) appears to be in a stuck delegation state from a previous attempt. ` +
+                            "Please try a different shard, or contact support to clean up the state."
+                        );
+                    }
+                    throw delegateErr;
+                }
+            } else {
+                console.log(`Shard (${shardX}, ${shardY}) is already delegated.`);
+                return "already-delegated";
+            }
+        } catch (err) {
+            const message = err instanceof Error ? err.message : "Failed to initialize shard";
+            setError(message);
+            throw err;
+        } finally {
+            setIsLoading(false);
+        }
+    }, [connection, sessionProgram, sessionKey.keypair, delegateShardWithSession]);
 
     /**
      * Commit shard state from ER to base layer
@@ -677,11 +1044,39 @@ export function useMagicplaceProgram() {
         return getPixelFromShard(shard, localX, localY);
     }, [fetchShard, getPixelFromShard]);
 
+    /**
+     * Estimate the cost to unlock (initialize + delegate) a shard
+     * Returns the cost in SOL based on current shard state
+     */
+    const estimateShardUnlockCost = useCallback(async (shardX: number, shardY: number): Promise<{
+        total: number;
+        breakdown: { initCost: number; delegateCost: number };
+        needsInit: boolean;
+        needsDelegate: boolean;
+    }> => {
+        const shardPDA = deriveShardPDA(shardX, shardY);
+        const accountInfo = await connection.getAccountInfo(shardPDA);
+        
+        const needsInit = accountInfo === null;
+        const needsDelegate = accountInfo === null || !accountInfo.owner.equals(DELEGATION_PROGRAM_ID);
+        
+        const initCost = needsInit ? (SHARD_RENT_SOL + TX_FEE_SOL) : 0;
+        const delegateCost = needsDelegate ? DELEGATION_TX_FEE_SOL : 0;
+        
+        return {
+            total: initCost + delegateCost,
+            breakdown: { initCost, delegateCost },
+            needsInit,
+            needsDelegate,
+        };
+    }, [connection]);
+
     return {
         // Program instances
         program,
         erProgram,
         erConnection,
+        sessionActive, // Whether session key is available for signing
 
         // Loading/error state
         isLoading,
@@ -694,12 +1089,14 @@ export function useMagicplaceProgram() {
 
         // Shard management (initializeShard includes automatic delegation to ER)
         initializeShard,
-        // delegateShard, // For re-delegation only
+        delegateShard,
         commitShard,
+        estimateShardUnlockCost,
 
         // User session management
         initializeUser,
         delegateUser,
+        checkUserDelegation, // Exporting this function
         deriveSessionPDA,
 
         // Pixel operations (base layer)
