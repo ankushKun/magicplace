@@ -5,6 +5,13 @@ import { SHARD_DIMENSION, SHARDS_PER_DIM, CANVAS_RES } from '../constants';
 import { globalPxToLatLon } from '../lib/projection';
 import lockedTexture from '../assets/locked.jpg';
 
+// ... imports
+interface UnlockingShardState {
+    x: number;
+    y: number;
+    status: string;
+}
+
 interface ShardGridOverlayProps {
     visible: boolean;
     onAggregatedChange?: (isAggregated: boolean) => void;
@@ -14,6 +21,7 @@ interface ShardGridOverlayProps {
     onUnlockShard?: (shardX: number, shardY: number) => void;
     highlightShard?: { x: number; y: number } | null;
     hideLockedOverlay?: boolean;
+    unlockingShard?: UnlockingShardState | null;
 }
 
 /**
@@ -22,7 +30,7 @@ interface ShardGridOverlayProps {
  * Hover detection (locked texture + icon) always works when zoomed in.
  * Grid lines/labels only show when visible=true.
  */
-export function ShardGridOverlay({ visible, onAggregatedChange, onVisibleShardsChange, alertShard, unlockedShards, onUnlockShard, highlightShard, hideLockedOverlay }: ShardGridOverlayProps) {
+export function ShardGridOverlay({ visible, onAggregatedChange, onVisibleShardsChange, alertShard, unlockedShards, onUnlockShard, highlightShard, hideLockedOverlay, unlockingShard }: ShardGridOverlayProps) {
     const map = useLeafletMap();
     const gridLayerRef = useRef<L.LayerGroup | null>(null);
     const labelsLayerRef = useRef<L.LayerGroup | null>(null);
@@ -30,58 +38,141 @@ export function ShardGridOverlay({ visible, onAggregatedChange, onVisibleShardsC
     const hoverEffectLayerRef = useRef<L.LayerGroup | null>(null);
     const alertLayerRef = useRef<L.LayerGroup | null>(null);
     const highlightLayerRef = useRef<L.LayerGroup | null>(null);
+    const unlockingLayerRef = useRef<L.LayerGroup | null>(null);
     const [visibleShards, setVisibleShards] = useState<{ x: number; y: number }[]>([]);
 
     // Create all layers once
     useEffect(() => {
-        if (!gridLayerRef.current) {
-            gridLayerRef.current = L.layerGroup();
-        }
-        if (!labelsLayerRef.current) {
-            labelsLayerRef.current = L.layerGroup();
-        }
-        if (!hoverDetectionLayerRef.current) {
-            hoverDetectionLayerRef.current = L.layerGroup();
-        }
-        if (!hoverEffectLayerRef.current) {
-            hoverEffectLayerRef.current = L.layerGroup();
-        }
-        if (!alertLayerRef.current) {
-            alertLayerRef.current = L.layerGroup();
+        if (!gridLayerRef.current) gridLayerRef.current = L.layerGroup();
+        if (!labelsLayerRef.current) labelsLayerRef.current = L.layerGroup();
+        if (!hoverDetectionLayerRef.current) hoverDetectionLayerRef.current = L.layerGroup();
+        if (!hoverEffectLayerRef.current) hoverEffectLayerRef.current = L.layerGroup();
+        if (!alertLayerRef.current) alertLayerRef.current = L.layerGroup();
+        if (!highlightLayerRef.current) highlightLayerRef.current = L.layerGroup();
+        if (!unlockingLayerRef.current) unlockingLayerRef.current = L.layerGroup();
+
+        // Create custom pane for unlocking overlay (highest priority)
+        if (!map.getPane('unlockingPane')) {
+            const pane = map.createPane('unlockingPane');
+            pane.style.zIndex = '900';
+            pane.style.pointerEvents = 'none'; // Let clicks pass through if needed, though we want to block interactions mostly
         }
 
         // Hover detection and effects are always added to map
         hoverDetectionLayerRef.current.addTo(map);
         hoverEffectLayerRef.current.addTo(map);
         alertLayerRef.current.addTo(map);
+        unlockingLayerRef.current.addTo(map);
 
         return () => {
-            if (gridLayerRef.current) {
-                gridLayerRef.current.clearLayers();
-                map.removeLayer(gridLayerRef.current);
-            }
-            if (labelsLayerRef.current) {
-                labelsLayerRef.current.clearLayers();
-                map.removeLayer(labelsLayerRef.current);
-            }
-            if (hoverDetectionLayerRef.current) {
-                hoverDetectionLayerRef.current.clearLayers();
-                map.removeLayer(hoverDetectionLayerRef.current);
-            }
-            if (hoverEffectLayerRef.current) {
-                hoverEffectLayerRef.current.clearLayers();
-                map.removeLayer(hoverEffectLayerRef.current);
-            }
-            if (alertLayerRef.current) {
-                alertLayerRef.current.clearLayers();
-                map.removeLayer(alertLayerRef.current);
-            }
-            if (highlightLayerRef.current) {
-                highlightLayerRef.current.clearLayers();
-                map.removeLayer(highlightLayerRef.current);
-            }
+             const layers = [
+                gridLayerRef, labelsLayerRef, hoverDetectionLayerRef, 
+                hoverEffectLayerRef, alertLayerRef, highlightLayerRef, 
+                unlockingLayerRef
+            ];
+            
+            layers.forEach(ref => {
+                if (ref.current) {
+                    ref.current.clearLayers();
+                    map.removeLayer(ref.current);
+                }
+            });
         };
     }, [map]);
+
+    // Handle unlocking status overlay
+    useEffect(() => {
+        if (!unlockingLayerRef.current) return;
+        
+        unlockingLayerRef.current.clearLayers();
+        
+        if (!unlockingShard) return;
+        
+        console.log("Rendering unlocking overlay for:", unlockingShard);
+        
+        const { x: shardX, y: shardY, status } = unlockingShard;
+
+        // Calculate shard bounds
+        const px1 = shardX * SHARD_DIMENSION;
+        const py1 = shardY * SHARD_DIMENSION;
+        const px2 = (shardX + 1) * SHARD_DIMENSION;
+        const py2 = (shardY + 1) * SHARD_DIMENSION;
+        const { lat: lat1, lon: lon1 } = globalPxToLatLon(px1, py1);
+        const { lat: lat2, lon: lon2 } = globalPxToLatLon(px2, py2);
+        
+        const centerLat = (lat1 + lat2) / 2;
+        const centerLon = (lon1 + lon2) / 2;
+        
+        // Add overlay background
+        const shardBounds: L.LatLngBoundsExpression = [
+            [Math.min(lat1, lat2), Math.min(lon1, lon2)],
+            [Math.max(lat1, lat2), Math.max(lon1, lon2)],
+        ];
+        
+        const loadingOverlay = L.rectangle(shardBounds, {
+            color: '#3b82f6',
+            weight: 2,
+            opacity: 0.8,
+            fillColor: '#000000',
+            fillOpacity: 0.6,
+            interactive: false,
+            pane: 'unlockingPane'
+        });
+        unlockingLayerRef.current.addLayer(loadingOverlay);
+
+        // Add loading spinner and text
+        // We inject a style tag for the animation to ensure it exists
+        const animationStyle = `
+            @keyframes spin-slow {
+                from { transform: rotate(0deg); }
+                to { transform: rotate(360deg); }
+            }
+        `;
+
+        const loadingIcon = L.divIcon({
+            html: `<div style="
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                gap: 12px;
+                color: white;
+                text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+                width: 200px;
+                pointer-events: none;
+            ">
+                <style>${animationStyle}</style>
+                <div style="animation: spin-slow 2s linear infinite;">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10" stroke-opacity="0.25"></circle>
+                        <path d="M12 2C6.48 2 2 6.48 2 12" stroke-opacity="1"></path>
+                    </svg>
+                </div>
+                <div style="
+                    font-size: 14px;
+                    font-weight: 600;
+                    background: rgba(0,0,0,0.6);
+                    padding: 6px 12px;
+                    border-radius: 20px;
+                    backdrop-filter: blur(4px);
+                    text-align: center;
+                ">${status}</div>
+            </div>`,
+            className: 'unlocking-loader',
+            iconSize: [200, 100],
+            iconAnchor: [100, 50],
+            pane: 'unlockingPane' // Important: render in the high z-index pane
+        });
+
+        const marker = L.marker([centerLat, centerLon], {
+            icon: loadingIcon,
+            interactive: false,
+            pane: 'unlockingPane'
+        });
+        
+        unlockingLayerRef.current.addLayer(marker);
+
+    }, [unlockingShard]);
 
     // Initialize highlight layer on mount with high z-index pane
     useEffect(() => {
@@ -363,15 +454,16 @@ export function ShardGridOverlay({ visible, onAggregatedChange, onVisibleShardsC
                     let lockMarker: L.Marker | null = null;
                     let unlockButtonMarker: L.Marker | null = null;
 
-                    // Check if this shard is unlocked
+                    // Check if this shard is unlocked or currently unlocking
                     const shardKey = `${sx},${sy}`;
                     const isUnlocked = unlockedShards?.has(shardKey) ?? false;
+                    const isUnlocking = unlockingShard?.x === sx && unlockingShard?.y === sy;
 
                     hoverRect.on('mouseover', () => {
                         if (!hoverEffectLayerRef.current) return;
                         
-                        // Don't show locked overlay for unlocked shards or in readonly mode
-                        if (isUnlocked || hideLockedOverlay) return;
+                        // Don't show locked overlay for unlocked shards, currently unlocking shards, or in readonly mode
+                        if (isUnlocked || isUnlocking || hideLockedOverlay) return;
 
                         // Create locked texture overlay with 20% opacity
                         hoverOverlay = L.imageOverlay(lockedTexture, shardBounds, {
@@ -484,7 +576,7 @@ export function ShardGridOverlay({ visible, onAggregatedChange, onVisibleShardsC
             map.off('moveend', updateHoverZones);
             map.off('zoomend', updateHoverZones);
         };
-    }, [map, onAggregatedChange, onVisibleShardsChange, unlockedShards, hideLockedOverlay]);
+    }, [map, onAggregatedChange, onVisibleShardsChange, unlockedShards, hideLockedOverlay, unlockingShard]);
 
     // Update visible grid lines and labels (only when visible=true)
     useEffect(() => {

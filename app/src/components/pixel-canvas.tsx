@@ -196,6 +196,7 @@ export function PixelCanvas() {
     const [unlockedShards, setUnlockedShards] = useState<Set<string>>(new Set());
     const [recentUnlockedShards, setRecentUnlockedShards] = useState<{ x: number; y: number; timestamp: number }[]>([]);
     const [highlightShard, setHighlightShard] = useState<{ x: number; y: number } | null>(null);
+    const [unlockingShard, setUnlockingShard] = useState<{ x: number; y: number; status: string } | null>(null);
 
     // Magicplace program hook for checking shard delegation status
     const { 
@@ -459,10 +460,17 @@ export function PixelCanvas() {
         }
     }, [selectedColor, updateMarker, removeMarker, playPop, isShardLocked, placePixelOnER, erasePixelOnER]);
 
+
+
     // Handle shard unlock
     const handleUnlockShard = useCallback(async (shardX: number, shardY: number) => {
         const shardKey = `${shardX},${shardY}`;
         
+        // Disable if already unlocking
+        if (unlockingShard) return;
+
+        setUnlockingShard({ x: shardX, y: shardY, status: "Estimating cost..." });
+
         try {
             // Get accurate cost estimate based on current shard state
             const costEstimate = await estimateShardUnlockCost(shardX, shardY);
@@ -475,6 +483,7 @@ export function PixelCanvas() {
                     newSet.add(shardKey);
                     return newSet;
                 });
+                setUnlockingShard(null);
                 return;
             }
             
@@ -485,6 +494,7 @@ export function PixelCanvas() {
             );
             if (!hasBalance) {
                 // Popup will be shown by the provider
+                setUnlockingShard(null);
                 return;
             }
  
@@ -492,7 +502,13 @@ export function PixelCanvas() {
             playPop();
 
             // Initialize and delegate the shard
-            await initializeShard(shardX, shardY);
+            setUnlockingShard(prev => prev ? { ...prev, status: "Checking status..." } : null);
+            await initializeShard(shardX, shardY, (status) => {
+                setUnlockingShard(prev => prev ? { ...prev, status } : null);
+            });
+            
+            setUnlockingShard(prev => prev ? { ...prev, status: "Done!" } : null);
+            await new Promise(r => setTimeout(r, 500)); // Show done briefly
             
             // Refresh balance after transaction
             refreshBalance();
@@ -517,8 +533,10 @@ export function PixelCanvas() {
             // Show more informative error
             const errorMessage = err instanceof Error ? err.message : "Failed to unlock shard";
             alert(errorMessage);
+        } finally {
+            setUnlockingShard(null);
         }
-    }, [playPop, initializeShard, estimateShardUnlockCost, checkBalance, refreshBalance]);
+    }, [playPop, initializeShard, estimateShardUnlockCost, checkBalance, refreshBalance, unlockingShard]);
 
     // Zoom to show a locked shard
     const zoomToLockedShard = useCallback((px: number, py: number) => {

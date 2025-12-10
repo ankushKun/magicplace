@@ -840,7 +840,18 @@ export function useMagicplaceProgram() {
      * After initialization, the shard is automatically delegated to Ephemeral Rollups
      * for fast, low-cost pixel placement transactions.
      */
-    const initializeShard = useCallback(async (shardX: number, shardY: number): Promise<string> => {
+    /**
+     * Initializes a shard if needed, using the session key.
+     * After initialization, the shard is automatically delegated to Ephemeral Rollups
+     * for fast, low-cost pixel placement transactions.
+     * 
+     * @param onStatusUpdate Optional callback for status updates (e.g. for loading UI)
+     */
+    const initializeShard = useCallback(async (
+        shardX: number, 
+        shardY: number,
+        onStatusUpdate?: (status: string) => void
+    ): Promise<string> => {
         if (!program || !sessionKey.keypair) {
             throw new Error("Program or session key not available");
         }
@@ -851,6 +862,8 @@ export function useMagicplaceProgram() {
 
         setIsLoading(true);
         setError(null);
+        
+        onStatusUpdate?.("Checking status...");
 
         try {
             const shardPDA = deriveShardPDA(shardX, shardY);
@@ -901,6 +914,7 @@ export function useMagicplaceProgram() {
                     throw new Error("Session program not initialized");
                 }
                 
+                onStatusUpdate?.("Initializing...");
                 console.log(`Initializing shard (${shardX}, ${shardY})...`);
                 const priorityFeeIx = ComputeBudgetProgram.setComputeUnitPrice({
                     microLamports: PRIORITY_FEE_MICRO_LAMPORTS,
@@ -953,12 +967,14 @@ export function useMagicplaceProgram() {
                 
                 // Wait for the account state to settle before delegation
                 // Devnet can have propagation delays
+                onStatusUpdate?.("Waiting for settle...");
                 console.log("Waiting for shard account to settle...");
                 await new Promise(resolve => setTimeout(resolve, 3000));
             }
 
             // Step 4: Delegate if not already delegated
             if (!isDelegated) {
+                onStatusUpdate?.("Delegating...");
                 console.log(`Delegating shard (${shardX}, ${shardY})...`);
                 
                 try {
