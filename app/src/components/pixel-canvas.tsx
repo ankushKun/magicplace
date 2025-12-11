@@ -873,12 +873,6 @@ export function PixelCanvas() {
                                                         ({pixel.px}, {pixel.py})
                                                         {isTransparent && <span className="text-slate-400 ml-1 text-xs">(erased)</span>}
                                                     </div>
-                                                    <div className="text-xs text-slate-400">
-                                                        {(() => {
-                                                            const timeAgo = Math.floor(Date.now() / 1000 - pixel.timestamp);
-                                                            return timeAgo < 60 ? `${timeAgo}s ago` : `${Math.floor(timeAgo / 60)}m ago`;
-                                                        })()}
-                                                    </div>
                                                 </div>
                                             </div>
                                         );
@@ -908,8 +902,6 @@ export function PixelCanvas() {
                                     </div>
                                 ) : (
                                     recentUnlockedShards.slice(0, 20).map((shard) => {
-                                        const timeAgo = Math.floor((Date.now() - shard.timestamp) / 1000);
-                                        const timeStr = timeAgo < 60 ? `${timeAgo}s ago` : `${Math.floor(timeAgo / 60)}m ago`;
                                         return (
                                             <div
                                                 key={`${shard.x}-${shard.y}`}
@@ -938,9 +930,6 @@ export function PixelCanvas() {
                                                 <div className="flex-1">
                                                     <div className="text-sm font-medium text-slate-700">
                                                         Shard ({shard.x}, {shard.y})
-                                                    </div>
-                                                    <div className="text-xs text-slate-400">
-                                                        {timeStr}
                                                     </div>
                                                 </div>
                                                 <div className="text-emerald-500">
