@@ -182,8 +182,8 @@ export default function OnboardingWalkthrough({ onComplete }: Props) {
   }, [wallet, connection, createSessionKey, checkUserDelegation, initializeUser, delegateUser]);
 
   return (
-    <div className="fixed inset-0 bg-zinc-950/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4 font-sans">
-      <div className="bg-white rounded-[2.5rem] shadow-[0_8px_40px_-12px_rgba(0,0,0,0.2)] max-w-[24rem] w-full overflow-hidden border border-zinc-100 p-8 transform transition-all">
+    <div className="fixed inset-0 bg-zinc-950/40 backdrop-blur-sm z-[100] flex flex-col items-center justify-center p-4 font-sans">
+      <div className="bg-white rounded-[2.5rem] shadow-[0_8px_40px_-12px_rgba(0,0,0,0.2)] max-w-[24rem] w-full overflow-hidden border border-zinc-100 p-8 transform transition-all duration-300 ease-in-out">
         
         {/* Header */}
         <div className="flex flex-col items-center text-center">
@@ -273,6 +273,18 @@ export default function OnboardingWalkthrough({ onComplete }: Props) {
             </div>
           )}
         </div>
+      </div>
+      
+      {/* Faucet Link (Outside Card) */}
+      <div className="mt-3 text-center animate-in fade-in slide-in-from-top-2 duration-500 delay-300">
+        <a 
+            href="https://faucet.solana.com/" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-white/40 hover:text-white/80 text-xs font-medium transition-colors hover:underline underline-offset-4"
+        >
+            Need devnet SOL? Use Faucet
+        </a>
       </div>
     </div>
   );

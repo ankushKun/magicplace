@@ -790,7 +790,9 @@ export function PixelCanvas() {
 
         // Always check if shard is locked first
         if (isShardLocked(px, py)) {
-            playFail();
+            if (!isReadonly) {
+                playFail();
+            }
             zoomToLockedShard(px, py);
             return;
         }
@@ -798,14 +800,14 @@ export function PixelCanvas() {
         // Check if we should instant place or just select
         const isZoomedIn = currentZoom >= PIXEL_SELECT_ZOOM;
 
-        if (isZoomedIn) {
+        if (isZoomedIn && !isReadonly) {
             // Instant place!
             handlePlacePixelAt(px, py);
         }
 
         // Update selection and zoom in if needed
         handleMapClick(lat, lng, selectedColor === TRANSPARENT_COLOR ? '#ffffff' : selectedColor);
-    }, [currentZoom, handlePlacePixelAt, handleMapClick, selectedColor, isShardLocked, zoomToLockedShard, unlockingShard]);
+    }, [currentZoom, handlePlacePixelAt, handleMapClick, selectedColor, isShardLocked, zoomToLockedShard, unlockingShard, isReadonly]);
 
     // Keep track of unlocking shard in a ref to use in event callbacks without re-subscribing
     const unlockingShardRef = useRef(unlockingShard);

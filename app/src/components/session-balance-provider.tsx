@@ -27,10 +27,10 @@ interface SessionBalanceContextType {
 
 const SessionBalanceContext = createContext<SessionBalanceContextType>({
   balance: null,
-  refreshBalance: async () => {},
+  refreshBalance: async () => { },
   checkBalance: async () => true,
-  requestTopup: () => {},
-  topup: async () => {},
+  requestTopup: () => { },
+  topup: async () => { },
 });
 
 export function useSessionBalance() {
@@ -43,16 +43,16 @@ export function useSessionBalance() {
 
 const WalletIcon = () => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/>
-    <path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/>
+    <path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1" />
+    <path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4" />
   </svg>
 );
 
 const AlertIcon = () => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="10"/>
-    <line x1="12" y1="8" x2="12" y2="12"/>
-    <line x1="12" y1="16" x2="12.01" y2="16"/>
+    <circle cx="12" cy="12" r="10" />
+    <line x1="12" y1="8" x2="12" y2="12" />
+    <line x1="12" y1="16" x2="12.01" y2="16" />
   </svg>
 );
 
@@ -89,7 +89,7 @@ function LowBalancePopup({ amountNeeded, reason, currentBalance, onTopup, onClos
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-200 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-200 flex flex-col items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden">
         {/* Header */}
         <div className="bg-amber-50 p-6 text-center border-b border-amber-100">
@@ -155,6 +155,16 @@ function LowBalancePopup({ amountNeeded, reason, currentBalance, onTopup, onClos
           </div>
         </div>
       </div>
+      <div className="text-center pt-2">
+        <a
+          href="https://faucet.solana.com/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-xs text-slate-400 hover:text-slate-600 underline decoration-slate-300 underline-offset-2"
+        >
+          Need devnet SOL? Use Faucet
+        </a>
+      </div>
     </div>
   );
 }
@@ -167,7 +177,7 @@ export function SessionBalanceProvider({ children }: { children: ReactNode }) {
   const { connection } = useConnection();
   const wallet = useWallet();
   const { sessionKey } = useSessionKey();
-  
+
   const [balance, setBalance] = useState<number | null>(null);
   const [topupRequest, setTopupRequest] = useState<TopupRequest | null>(null);
 
@@ -206,7 +216,7 @@ export function SessionBalanceProvider({ children }: { children: ReactNode }) {
         console.error('Failed to fetch session balance:', e);
       }
     }
-    
+
     if (currentBalance === null || currentBalance < amountNeeded) {
       setTopupRequest({
         amountNeeded,
@@ -248,16 +258,16 @@ export function SessionBalanceProvider({ children }: { children: ReactNode }) {
 
       const signedTx = await wallet.signTransaction(tx);
       const sig = await connection.sendRawTransaction(signedTx.serialize());
-      
+
       toast.loading("Confirming top-up transaction...", { id: toastId });
       await connection.confirmTransaction(sig, 'confirmed');
 
       // Customize success message based on pending action
       let successMessage = `Successfully topped up ${amount} SOL!`;
       if (topupRequest?.reason && !topupRequest.reason.startsWith("Need")) {
-          // Convert "Unlock shard..." to "You can now unlock shard..."
-          const action = topupRequest.reason.charAt(0).toLowerCase() + topupRequest.reason.slice(1);
-          successMessage = `Top-up complete! You can now ${action}.`;
+        // Convert "Unlock shard..." to "You can now unlock shard..."
+        const action = topupRequest.reason.charAt(0).toLowerCase() + topupRequest.reason.slice(1);
+        successMessage = `Top-up complete! You can now ${action}.`;
       }
 
       toast.success(successMessage, { id: toastId });
@@ -274,7 +284,7 @@ export function SessionBalanceProvider({ children }: { children: ReactNode }) {
   return (
     <SessionBalanceContext.Provider value={{ balance, refreshBalance, checkBalance, requestTopup, topup: handleTopup }}>
       {children}
-      
+
       {/* Low Balance Popup */}
       {topupRequest && balance !== null && (
         <LowBalancePopup

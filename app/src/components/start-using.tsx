@@ -4,6 +4,7 @@ import { useSessionKey } from "@/hooks/use-session-key";
 import { useMagicplaceProgram } from "@/hooks/use-magicplace-program";
 import OnboardingWalkthrough from "./onboarding-walkthrough";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
+import { PenTool } from "lucide-react";
 
 // ============================================================================
 // Readonly Mode Context
@@ -71,16 +72,16 @@ function WelcomePopup({ onConnect, onBrowse }: WelcomePopupProps) {
 
   return (
     <div className="fixed inset-0 bg-zinc-950/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4 font-sans">
-      <div className="bg-white rounded-[2.5rem] shadow-[0_8px_40px_-12px_rgba(0,0,0,0.2)] max-w-[24rem] w-full overflow-hidden border border-zinc-100 p-8 transform transition-all">
+      <div className="bg-white rounded-[2.5rem] shadow-[0_8px_40px_-12px_rgba(0,0,0,0.2)] max-w-[24rem] w-full overflow-hidden border border-zinc-100 p-8 transform transition-all duration-300 ease-in-out">
         
         {/* Header Content */}
         {!showWalletList && (
            <div className="flex flex-col items-center text-center">
             {connected ? (
                  <>
-                    {/* <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mb-6 text-4xl shadow-inner text-emerald-500 animate-[bounce_1s_infinite]">
-                        ✨
-                    </div> */}
+                    <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mb-6 text-4xl shadow-inner text-emerald-500">
+                      <PenTool/>
+                    </div>
                     <h1 className="text-2xl font-bold text-slate-900 mb-2">Wallet Connected!</h1>
                     <p className="text-slate-500 text-sm leading-relaxed mb-8 max-w-[20rem]">
                         You're all set to start creating on the infinite canvas.
@@ -121,7 +122,7 @@ function WelcomePopup({ onConnect, onBrowse }: WelcomePopupProps) {
                             className="w-full py-4 bg-slate-50 hover:bg-slate-100 text-slate-600 font-bold rounded-full transition-all active:scale-95 flex items-center justify-center gap-2"
                         >
                             <EyeIcon />
-                            Just Looking
+                            Just explore for now
                         </button>
                     </div>
                 </>
@@ -176,6 +177,42 @@ function WelcomePopup({ onConnect, onBrowse }: WelcomePopupProps) {
 // Main Component
 // ============================================================================
 
+const Transition = ({ show, children, className = "" }: { show: boolean; children: React.ReactNode; className?: string }) => {
+    const [shouldRender, setShouldRender] = useState(show);
+    const [styles, setStyles] = useState("opacity-0 scale-95 pointer-events-none");
+
+    useEffect(() => {
+        if (show) {
+            setShouldRender(true);
+            // Small timeout to ensure DOM is present before animating in
+            const t = setTimeout(() => {
+                setStyles("opacity-100 scale-100");
+            }, 10);
+            return () => clearTimeout(t);
+        } else {
+            setStyles("opacity-0 scale-95 pointer-events-none");
+            const t = setTimeout(() => {
+                setShouldRender(false);
+            }, 300); // Match transition duration
+            return () => clearTimeout(t);
+        }
+    }, [show]);
+
+    if (!shouldRender) return null;
+
+    return (
+        <div className={`fixed inset-0 z-[100] transition-all duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] ${styles} ${className}`}>
+             {/* We use a relative container to ensure children with absolute/fixed positioning are contained if needed,
+                 though 'fixed' children in a transformed parent work relatively. */}
+            {children}
+        </div>
+    );
+};
+
+// ============================================================================
+// Main Component
+// ============================================================================
+
 /**
  * StartUsing - Gatekeeper component for onboarding flow
  */
@@ -195,21 +232,29 @@ export default function StartUsing({ children }: { children: React.ReactNode }) 
     setInitialized(true);
   }, []);
 
-  // Handle wallet connection
+  // Handle wallet connection & Transition logic
   useEffect(() => {
-    if (connected && !isActive && initialized && !showWelcome) {
-      // Just connected, need session key
-      setIsReadonly(false);
-      setShowOnboarding(true);
+    if (!initialized) return;
+
+    if (connected) {
+        // When connected, hide welcome and show onboarding if needed
+        setShowWelcome(false);
+        if (!isActive) {
+             // Delay showing onboarding slightly for a nice sequenced transition if dragging from Welcome
+             const t = setTimeout(() => setShowOnboarding(true), 150);
+             return () => clearTimeout(t);
+        }
+        setIsReadonly(false);
+    } else {
+        // If disconnected, ensure onboarding is hidden
+        setShowOnboarding(false);
     }
-  }, [connected, isActive, initialized, showWelcome]);
+  }, [connected, isActive, initialized]);
 
   // Verify session on-chain existence
   useEffect(() => {
     const validateSession = async () => {
         if (connected && isActive && sessionPublicKey && program) {
-            // Check if session exists on chain
-             // No need for timeout if we check program existence
             const session = await fetchSessionAccount(sessionPublicKey);
             if (!session) {
                 console.log("Session key exists locally but not on-chain. Revoking to force re-initialization.");
@@ -223,8 +268,7 @@ export default function StartUsing({ children }: { children: React.ReactNode }) 
 
   // Handle connect from welcome
   const handleConnect = () => {
-    setShowWelcome(false);
-    // Wallet adapter will handle connection, useEffect above will trigger onboarding
+     // Do nothing visual here; let the wallet adapter connection trigger the effect above
   };
 
   // Handle browse mode or continue
@@ -251,15 +295,15 @@ export default function StartUsing({ children }: { children: React.ReactNode }) 
     <ReadonlyModeContext.Provider value={{ isReadonly }}>
       {children}
       
-      {/* Welcome popup for all users until dismissed */}
-      {showWelcome && (
+      {/* Welcome popup */}
+      <Transition show={showWelcome && !connected}>
         <WelcomePopup onConnect={handleConnect} onBrowse={handleBrowse} />
-      )}
+      </Transition>
 
       {/* Onboarding for connected users without session */}
-      {showOnboarding && connected && !isActive && !showWelcome && (
+      <Transition show={showOnboarding && connected && !isActive}>
         <OnboardingWalkthrough onComplete={handleOnboardingComplete} />
-      )}
+      </Transition>
     </ReadonlyModeContext.Provider>
   );
 }
