@@ -410,12 +410,12 @@ export function useMagicplaceProgram() {
             try {
                 const erAccountInfo = await erConnection.getAccountInfo(shardPDA);
                 if (erAccountInfo && erAccountInfo.data.length > 0) {
-                    console.debug(`Shard (${shardX}, ${shardY}) found on ER - delegated`);
+                    // console.debug(`Shard (${shardX}, ${shardY}) found on ER - delegated`);
                     return "delegated";
                 }
             } catch (erErr) {
                 // ER might be unavailable or account not found, continue to base layer check
-                console.debug(`ER check failed for shard (${shardX}, ${shardY}), checking base layer...`);
+                // console.debug(`ER check failed for shard (${shardX}, ${shardY}), checking base layer...`);
             }
 
             // Step 2: Check base Solana layer
@@ -474,7 +474,7 @@ export function useMagicplaceProgram() {
                 bump: account.bump,
             };
         } catch (err) {
-            console.debug(`Shard (${shardX}, ${shardY}) not found on ER`);
+            // console.debug(`Shard (${shardX}, ${shardY}) not found on ER`);
             return null;
         }
     }, [erProgram, readOnlyErProgram]);

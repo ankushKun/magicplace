@@ -32,6 +32,41 @@ import { useWallet } from '@solana/wallet-adapter-react';
 import { useSessionKey } from '../hooks/use-session-key';
 import { CooldownTimer } from './cooldown-timer';
 import { Avatar, AvatarFallback } from './ui/avatar';
+import { useGunPresence } from '../hooks/use-gun-presence';
+import { divIcon } from 'leaflet';
+import { Marker as LeafletMarker } from 'react-leaflet';
+
+// Custom Cursor Icon with name label
+const createCursorIcon = (color: string, name: string) => divIcon({
+    className: 'bg-transparent',
+    html: `
+        <div style="
+            transform: translate(-3px, -3px);
+            pointer-events: none;
+        ">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M5.65376 12.3673H5.46026L5.31717 12.4976L0.500002 16.8829L0.500002 1.19841L11.7841 12.3673H5.65376Z" fill="${color}" stroke="white" stroke-width="1"/>
+            </svg>
+            <div style="
+                position: absolute;
+                left: 16px;
+                top: 14px;
+                background: ${color};
+                color: white;
+                padding: 2px 6px;
+                border-radius: 4px;
+                font-size: 10px;
+                font-weight: 600;
+                font-family: system-ui, -apple-system, sans-serif;
+                white-space: nowrap;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+                border: 1px solid rgba(255,255,255,0.3);
+            ">${name}</div>
+        </div>
+    `,
+    iconSize: [24, 24],
+    iconAnchor: [0, 0],
+});
 
 // Icons as inline SVGs
 const PaintBrushIcon = () => (
@@ -170,6 +205,8 @@ function Color({ color, selected, onClick }: { color: string, selected: boolean,
 }
 
 export function PixelCanvas() {
+    const { onlineUsers, updateMyPresence, myId } = useGunPresence();
+
     const {
         mapRef,
         selectedPixel,
@@ -186,6 +223,8 @@ export function PixelCanvas() {
         removeMarker,
         bulkUpdateMarkers,
     } = useMap();
+
+
 
     // Load saved map view from localStorage
     const savedMapView = useMemo(() => getSavedMapView(), []);
@@ -210,6 +249,15 @@ export function PixelCanvas() {
     }, [mapRef]);
 
     const [selectedColor, setSelectedColor] = useState<string>(PRESET_COLORS[0]);
+
+    // Update presence on mouse move
+    const handleMapMouseMove = useCallback((lat: number, lng: number) => {
+        // Existing hover logic
+        handleMapHover(lat, lng, selectedColor === TRANSPARENT_COLOR ? '#ffffff' : selectedColor);
+        
+        // Gun Presence - broadcast GPS coordinates directly
+        updateMyPresence(lat, lng);
+    }, [handleMapHover, selectedColor, updateMyPresence]);
     const [showRecentPixels, setShowRecentPixels] = useState(true);
     const [isToolbarExpanded, setIsToolbarExpanded] = useState(true);
     const [currentZoom, setCurrentZoom] = useState(DEFAULT_MAP_ZOOM);
@@ -934,7 +982,7 @@ export function PixelCanvas() {
                             setCurrentZoom(mapRef.current.getZoom());
                         }
                     }}
-                    onMouseMove={(lat, lng) => handleMapHover(lat, lng, selectedColor === TRANSPARENT_COLOR ? '#ffffff' : selectedColor)}
+                    onMouseMove={handleMapMouseMove}
                     onMouseOut={handleMapHoverOut}
                 />
                 <ShardGridOverlay
@@ -949,6 +997,17 @@ export function PixelCanvas() {
                     unlockingShard={unlockingShard}
                     shardMetadata={shardMetadata}
                 />
+                
+                {/* Live User Cursors */}
+                {onlineUsers.filter(u => u.id !== myId).map(user => (
+                    <LeafletMarker
+                        key={user.id}
+                        position={[user.lat, user.lng]}
+                        icon={createCursorIcon(user.color, user.name)}
+                        zIndexOffset={1000}
+                        interactive={false}
+                    />
+                ))}
             </MapContainer>
 
             {/* Shard Grid Zoom Hint */}
@@ -1050,18 +1109,35 @@ export function PixelCanvas() {
             <div className="absolute top-4 right-4 flex items-center gap-3 z-40">
 
                 {/* show currently live users here */}
-                <div className="flex flex-row flex-wrap items-center gap-12">
-                    <div className="*:data-[slot=avatar]:ring-background flex -space-x-2.5 hover:space-x-1.5 *:transition-all *:duration-300 *:ease-in-out *:data-[slot=avatar]:ring-2 *:data-[slot=avatar]:grayscale">
-                        <Avatar className='cursor-pointer'>
-                            <AvatarFallback>A</AvatarFallback>
-                        </Avatar>
-                        <Avatar className='cursor-pointer'>
-                            <AvatarFallback>B</AvatarFallback>
-                        </Avatar>
-                        <Avatar className='cursor-pointer'>
-                            <AvatarFallback>C</AvatarFallback>
-                        </Avatar>
-                    </div>
+                <div className="flex flex-row flex-wrap items-center gap-2 mr-2">
+                    {(() => {
+                        const otherUsers = onlineUsers.filter(u => u.id !== myId);
+                        return (
+                            <>
+                                <div className="flex -space-x-2.5 hover:space-x-1.5 *:transition-all *:duration-300 *:ease-in-out">
+                                    {otherUsers.slice(0, 5).map(user => (
+                                        <Avatar 
+                                            key={user.id} 
+                                            className='w-8 h-8 border-2 hover:scale-110 transition-transform' 
+                                            style={{ borderColor: 'white' }}
+                                            onClick={() => {
+                                                mapRef.current?.setView([user.lat, user.lng], 15, { animate: true });
+                                            }}
+                                        >
+                                            <AvatarFallback style={{ backgroundColor: user.color, color: 'white', fontSize: '10px', fontWeight: 600 }}>
+                                                {user.name.slice(0, 2).toUpperCase()}
+                                            </AvatarFallback>
+                                        </Avatar>
+                                    ))}
+                                </div>
+                                {otherUsers.length > 5 && (
+                                    <span className="text-xs font-semibold text-slate-300 bg-slate-800/50 px-2 py-1 rounded-full backdrop-blur-sm">
+                                        +{otherUsers.length - 5} more
+                                    </span>
+                                )}
+                            </>
+                        );
+                    })()}
                 </div>
 
                 {/* Shards Count - Toggle for Recent Shard unlocks */}
@@ -1113,7 +1189,7 @@ export function PixelCanvas() {
                                         return (
                                             <div
                                                 key={`${pixel.px}-${pixel.py}-${pixel.timestamp}`}
-                                                className="p-3 hover:bg-slate-50 cursor-pointer transition-colors flex items-center gap-3 border-b border-slate-100 last:border-0"
+                                                className="p-3 hover:bg-slate-50 transition-colors flex items-center gap-3 border-b border-slate-100 last:border-0"
                                                 onClick={() => {
                                                     focusOnPixel(pixel.px, pixel.py);
                                                 }}
@@ -1169,7 +1245,7 @@ export function PixelCanvas() {
                                         return (
                                             <div
                                                 key={`${shard.x}-${shard.y}`}
-                                                className="p-3 hover:bg-slate-50 cursor-pointer transition-colors flex items-center gap-3 border-b border-slate-100 last:border-0"
+                                                className="p-3 hover:bg-slate-50 transition-colors flex items-center gap-3 border-b border-slate-100 last:border-0"
                                                 onClick={() => {
                                                     // Navigate to shard center
                                                     const centerPx = (shard.x + 0.5) * SHARD_DIMENSION;

@@ -4,6 +4,7 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { useConnection } from "@solana/wallet-adapter-react";
 import { LAMPORTS_PER_SOL, SystemProgram, Transaction } from "@solana/web3.js";
 import { useMagicplaceProgram } from "@/hooks/use-magicplace-program";
+import { setNickname, getNickname } from "@/hooks/use-gun-presence";
 
 // ============================================================================
 // Icons
@@ -62,6 +63,7 @@ export default function OnboardingWalkthrough({ onComplete }: Props) {
   
   const [step, setStep] = useState<SetupStep>("idle");
   const [error, setError] = useState<string | null>(null);
+  const [nickname, setNicknameInput] = useState<string>(getNickname() || "");
   const [stepStatus, setStepStatus] = useState<StepStatus>({
     derive: false,
     authorize: false,
@@ -83,12 +85,15 @@ export default function OnboardingWalkthrough({ onComplete }: Props) {
     });
   }, []);
 
-  // Main setup handler (Same logic as before, just kept for context)
+  // Main setup handler
   const handleSetup = useCallback(async () => {
     if (!wallet.publicKey || !wallet.signTransaction) {
       setError("Wallet not properly connected");
       return;
     }
+
+    // Save nickname before starting
+    setNickname(nickname.trim() || null);
 
     setStep("deriving");
     setError(null);
@@ -179,7 +184,7 @@ export default function OnboardingWalkthrough({ onComplete }: Props) {
       setError(e instanceof Error ? e.message : "Setup failed. Please try again.");
       setStep("error");
     }
-  }, [wallet, connection, createSessionKey, checkUserDelegation, initializeUser, delegateUser]);
+  }, [wallet, connection, createSessionKey, checkUserDelegation, initializeUser, delegateUser, nickname]);
 
   return (
     <div className="fixed inset-0 bg-zinc-950/40 backdrop-blur-sm z-[100] flex flex-col items-center justify-center p-4 font-sans">
@@ -212,6 +217,23 @@ export default function OnboardingWalkthrough({ onComplete }: Props) {
         <div>
           {step === "idle" && (
             <div className="space-y-6">
+               {/* Nickname Input */}
+               <div>
+                 <label htmlFor="nickname" className="block text-sm font-bold text-slate-700 mb-2">
+                   Nickname <span className="text-slate-400 font-normal">(optional)</span>
+                 </label>
+                 <input
+                   type="text"
+                   id="nickname"
+                   value={nickname}
+                   onChange={(e) => setNicknameInput(e.target.value)}
+                   placeholder="Enter a display name..."
+                   maxLength={20}
+                   className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                 />
+                 <p className="mt-1 text-xs text-slate-400">Shown to others on the map</p>
+               </div>
+
                <div className="bg-slate-50 rounded-3xl p-6 border border-slate-100">
                 <div className="flex items-start gap-4 mb-4">
                   <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center shrink-0 text-sm font-bold text-indigo-600">1</div>

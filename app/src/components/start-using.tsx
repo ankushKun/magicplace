@@ -2,6 +2,7 @@ import { useState, useEffect, createContext, useContext } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useSessionKey } from "@/hooks/use-session-key";
 import { useMagicplaceProgram } from "@/hooks/use-magicplace-program";
+import { getNickname, setNickname } from "@/hooks/use-gun-presence";
 import OnboardingWalkthrough from "./onboarding-walkthrough";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { PenTool } from "lucide-react";
@@ -60,9 +61,23 @@ interface WelcomePopupProps {
 function WelcomePopup({ onConnect, onBrowse }: WelcomePopupProps) {
   const { select, wallets, connecting, connected } = useWallet();
   const [showWalletList, setShowWalletList] = useState(false);
+  const [nickname, setNicknameInput] = useState(getNickname() || "");
+
+  // When wallet connects, trigger onConnect callback
+  useEffect(() => {
+    if (connected && showWalletList) {
+      onConnect();
+    }
+  }, [connected, showWalletList, onConnect]);
 
   const handleConnectClick = () => {
     setShowWalletList(true);
+  };
+
+  const handleEnter = () => {
+    // Save nickname before entering
+    setNickname(nickname.trim() || null);
+    onBrowse();
   };
 
   // Find installed wallets
@@ -83,11 +98,29 @@ function WelcomePopup({ onConnect, onBrowse }: WelcomePopupProps) {
                       <PenTool/>
                     </div>
                     <h1 className="text-2xl font-bold text-slate-900 mb-2">Welcome to Magicplace!</h1>
-                    <p className="text-slate-500 text-sm leading-relaxed mb-8 max-w-[20rem]">
+                    <p className="text-slate-500 text-sm leading-relaxed mb-6 max-w-[20rem]">
                         You're all set to start creating on the infinite canvas.
                     </p>
+                    
+                    {/* Nickname Input */}
+                    <div className="w-full mb-6 text-left">
+                      <label htmlFor="welcome-nickname" className="block text-sm font-bold text-slate-700 mb-2">
+                        Nickname <span className="text-slate-400 font-normal">(optional)</span>
+                      </label>
+                      <input
+                        type="text"
+                        id="welcome-nickname"
+                        value={nickname}
+                        onChange={(e) => setNicknameInput(e.target.value)}
+                        placeholder="Enter a display name..."
+                        maxLength={20}
+                        className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                      />
+                      <p className="mt-1 text-xs text-slate-400">Shown to others on the map</p>
+                    </div>
+
                     <button
-                        onClick={onBrowse}
+                        onClick={handleEnter}
                         className="w-full py-4 bg-slate-900 hover:bg-black text-white font-bold rounded-full shadow-[0_4px_14px_0_rgba(0,0,0,0.39)] hover:shadow-[0_6px_20px_rgba(0,0,0,0.23)] hover:-translate-y-0.5 transition-all active:scale-95 flex items-center justify-center gap-2"
                     >
                         Enter Magicplace
@@ -142,30 +175,38 @@ function WelcomePopup({ onConnect, onBrowse }: WelcomePopupProps) {
                             <path d="M15 18l-6-6 6-6"/>
                         </svg>
                     </button>
-                    <h2 className="text-lg font-bold text-slate-900">Select Wallet</h2>
+                    <h2 className="text-lg font-bold text-slate-900">
+                        {connecting ? "Connecting..." : "Select Wallet"}
+                    </h2>
                     <div className="w-8" /> {/* Spacer for centering */}
                 </div>
 
-                <div className="space-y-3">
-                    {installedWallets.map((wallet) => (
-                    <button
-                        key={wallet.adapter.name}
-                        onClick={() => {
-                            select(wallet.adapter.name);
-                            onConnect();
-                        }}
-                        disabled={connecting}
-                        className="w-full flex items-center gap-4 p-4 rounded-3xl border-2 border-slate-50 bg-white hover:border-indigo-100 hover:bg-indigo-50/30 transition-all group active:scale-[0.98]"
-                    >
-                        <img 
-                            src={wallet.adapter.icon} 
-                            alt={wallet.adapter.name} 
-                            className="w-10 h-10 rounded-xl shadow-sm group-hover:scale-110 transition-transform"
-                        />
-                        <span className="font-bold text-slate-700 group-hover:text-indigo-900 text-lg">{wallet.adapter.name}</span>
-                    </button>
-                    ))}
-                </div>
+                {connecting ? (
+                    <div className="flex flex-col items-center justify-center py-8">
+                        <div className="w-12 h-12 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mb-4"></div>
+                        <p className="text-slate-500 font-medium">Waiting for wallet...</p>
+                    </div>
+                ) : (
+                    <div className="space-y-3">
+                        {installedWallets.map((wallet) => (
+                        <button
+                            key={wallet.adapter.name}
+                            onClick={() => {
+                                select(wallet.adapter.name);
+                            }}
+                            disabled={connecting}
+                            className="w-full flex items-center gap-4 p-4 rounded-3xl border-2 border-slate-50 bg-white hover:border-indigo-100 hover:bg-indigo-50/30 transition-all group active:scale-[0.98]"
+                        >
+                            <img 
+                                src={wallet.adapter.icon} 
+                                alt={wallet.adapter.name} 
+                                className="w-10 h-10 rounded-xl shadow-sm group-hover:scale-110 transition-transform"
+                            />
+                            <span className="font-bold text-slate-700 group-hover:text-indigo-900 text-lg">{wallet.adapter.name}</span>
+                        </button>
+                        ))}
+                    </div>
+                )}
             </div>
         )}
       </div>
@@ -260,9 +301,12 @@ export default function StartUsing({ children }: { children: React.ReactNode }) 
     validateSession();
   }, [connected, isActive, sessionPublicKey, fetchSessionAccount, revokeSession, program]);
 
-  // Handle connect from welcome
+  // Handle connect from welcome - wallet is now connected
   const handleConnect = () => {
-     // Do nothing visual here; let the wallet adapter connection trigger the effect above
+    setShowWelcome(false);
+    setIsReadonly(false);
+    // Start onboarding after a short delay
+    setTimeout(() => setShowOnboarding(true), 300);
   };
 
   // Handle browse mode or continue
