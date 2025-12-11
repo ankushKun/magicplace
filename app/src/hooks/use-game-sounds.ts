@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 // @ts-ignore
 import popSoundUrl from '../assets/pop.mp3';
 // @ts-ignore
@@ -8,13 +8,30 @@ import failSoundUrl from '../assets/fail.mp3';
 // @ts-ignore
 import bgMusicUrl from '../assets/bg-loop.mp3';
 
+const MUTE_STORAGE_KEY = 'magicplace-muted';
+
 export function useGameSounds() {
     const bgMusicRef = useRef<HTMLAudioElement | null>(null);
-    
-    // Pop sound pool
     const audioPoolRef = useRef<HTMLAudioElement[]>([]);
     const poolIndexRef = useRef(0);
     const poolSize = 8;
+    
+    // Initialize mute state from localStorage
+    const [isMuted, setIsMuted] = useState(() => {
+        try {
+            return localStorage.getItem(MUTE_STORAGE_KEY) === 'true';
+        } catch {
+            return false;
+        }
+    });
+
+    const toggleMute = useCallback(() => {
+        setIsMuted(prev => {
+            const next = !prev;
+            localStorage.setItem(MUTE_STORAGE_KEY, String(next));
+            return next;
+        });
+    }, []);
 
     // Initialize BG Music and Pop Pool
     useEffect(() => {
@@ -25,20 +42,38 @@ export function useGameSounds() {
             audio.volume = 0.12; // Low volume
             bgMusicRef.current = audio;
 
-            // Try to play immediately
-            const playPromise = audio.play();
-            if (playPromise !== undefined) {
-                playPromise.catch(() => {
-                    // Auto-play was prevented
-                    // Add a one-time click listener to start audio
-                    const startAudio = () => {
-                        audio.play().catch(console.error);
-                        document.removeEventListener('click', startAudio);
-                        document.removeEventListener('keydown', startAudio);
-                    };
-                    document.addEventListener('click', startAudio);
-                    document.addEventListener('keydown', startAudio);
-                });
+            // Handle initial playback
+            const playAudio = () => {
+                if (bgMusicRef.current && bgMusicRef.current.paused && !isMuted) {
+                    bgMusicRef.current.play().catch(() => {});
+                }
+            };
+
+            // Try to play immediately if not muted
+            if (!isMuted) {
+                const playPromise = audio.play();
+                if (playPromise !== undefined) {
+                    playPromise.catch(() => {
+                        // Auto-play prevented, wait for interaction
+                        const startAudio = () => {
+                            playAudio();
+                            document.removeEventListener('click', startAudio);
+                            document.removeEventListener('keydown', startAudio);
+                        };
+                        document.addEventListener('click', startAudio);
+                        document.addEventListener('keydown', startAudio);
+                    });
+                }
+            } else {
+                // If muted, we still want to "unlock" audio on first interaction so we can play later
+                const unlockAudio = () => {
+                    // Just needed for browser policy mostly, but actually since we don't play, 
+                    // we might need to handle this when we unmute.
+                    document.removeEventListener('click', unlockAudio);
+                    document.removeEventListener('keydown', unlockAudio);
+                };
+                document.addEventListener('click', unlockAudio);
+                document.addEventListener('keydown', unlockAudio);
             }
         }
 
@@ -57,9 +92,33 @@ export function useGameSounds() {
                 bgMusicRef.current = null;
             }
         };
-    }, []);
+    }, []); // Only run once on mount
+
+    // Effect to handle mute toggling
+    useEffect(() => {
+        const audio = bgMusicRef.current;
+        if (!audio) return;
+
+        if (isMuted) {
+            audio.pause();
+        } else {
+            // Unmuted, try to play
+            audio.play().catch(() => {
+                // If failed (e.g. no interaction yet), wait for interaction
+                const startAudio = () => {
+                    audio.play().catch(() => {});
+                    document.removeEventListener('click', startAudio);
+                    document.removeEventListener('keydown', startAudio);
+                };
+                document.addEventListener('click', startAudio);
+                document.addEventListener('keydown', startAudio);
+            });
+        }
+    }, [isMuted]);
 
     const playPop = useCallback(() => {
+        if (isMuted) return;
+        
         try {
             if (audioPoolRef.current.length === 0) return;
             
@@ -75,9 +134,11 @@ export function useGameSounds() {
         } catch (e) {
             // Ignore
         }
-    }, []);
+    }, [isMuted]);
 
     const playUnlock = useCallback(() => {
+        if (isMuted) return;
+
         try {
             const audio = new Audio(unlockSoundUrl);
             audio.volume = 0.6;
@@ -85,9 +146,11 @@ export function useGameSounds() {
         } catch (e) {
             console.error('Failed to play unlock sound', e);
         }
-    }, []);
+    }, [isMuted]);
 
     const playFail = useCallback(() => {
+        if (isMuted) return;
+
         try {
             const audio = new Audio(failSoundUrl);
             audio.volume = 0.5;
@@ -95,7 +158,7 @@ export function useGameSounds() {
         } catch (e) {
             console.error('Failed to play fail sound', e);
         }
-    }, []);
+    }, [isMuted]);
 
-    return { playPop, playUnlock, playFail };
+    return { playPop, playUnlock, playFail, isMuted, toggleMute };
 }

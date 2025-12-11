@@ -20,7 +20,7 @@ import {
 } from '../constants';
 import { WalletConnect } from './wallet-connect';
 import { Button } from './ui/button';
-import { Brush, Eraser, Grid2X2Plus, Unlock } from 'lucide-react';
+import { Brush, Eraser, Grid2X2Plus, Unlock, Volume2, VolumeX } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useGameSounds } from '../hooks/use-game-sounds';
 import { useMagicplaceProgram, COOLDOWN_LIMIT, COOLDOWN_PERIOD } from '../hooks/use-magicplace-program';
@@ -339,7 +339,7 @@ export function PixelCanvas() {
 
         const fetchFeed = async () => {
             try {
-                const res = await fetch(process.env.NODE_ENV=="production" ? "https://arweave.tech/api/magicplace/feed" : '/api/feed');
+                const res = await fetch(process.env.NODE_ENV=="production" ? "https://arweave.tech/api/magicplace/feed" : '/feed');
                 if (res.ok) {
                     const { pixels, shards } = await res.json();
 
@@ -586,7 +586,7 @@ export function PixelCanvas() {
     }, [selectedColor, selectedPixel, updateSelectedHighlightColor]);
 
     // Pop sound for pixel placement
-    const { playPop, playUnlock, playFail } = useGameSounds();
+    const { playPop, playUnlock, playFail, isMuted, toggleMute } = useGameSounds();
 
     // Check if a pixel is in a locked shard
     const isShardLocked = useCallback((px: number, py: number): boolean => {
@@ -952,7 +952,7 @@ export function PixelCanvas() {
                 zoom={initialZoom}
                 minZoom={MIN_MAP_ZOOM}
                 maxZoom={MAX_MAP_ZOOM}
-                className="w-full h-full cursor-crosshair [&_.leaflet-grab]:cursor-crosshair [&_.leaflet-dragging]:cursor-crosshair"
+                className="w-full h-full"
                 zoomControl={false}
                 worldCopyJump={false}
                 maxBounds={[[-90, -180], [90, 180]]}
@@ -1381,6 +1381,23 @@ export function PixelCanvas() {
                         </div>
                     </div>
                 </div>
+            </div>
+
+            {/* Mute Button */}
+            <div className="absolute bottom-6 right-6 z-50 print:hidden">
+                <Button
+                    variant="secondary"
+                    size="icon"
+                    onClick={toggleMute}
+                    className="bg-white/90 backdrop-blur shadow-lg hover:bg-white rounded-full h-10 w-10 border border-slate-200"
+                    title={isMuted ? "Unmute sounds" : "Mute sounds"}
+                >
+                    {isMuted ? (
+                        <VolumeX className="h-5 w-5 text-slate-500" />
+                    ) : (
+                        <Volume2 className="h-5 w-5 text-slate-700" />
+                    )}
+                </Button>
             </div>
 
             {/* Debug Panel - only visible in development */}

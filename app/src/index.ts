@@ -58,8 +58,8 @@ const server = serve({
         return jsonWithCors(user);
     },
 
-    // Serve index.html for all unmatched routes.
-    "/*": index,
+    // Serve index.html for /
+    "/": index,
   },
 
   development: process.env.NODE_ENV !== "production" && {
