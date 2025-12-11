@@ -9,28 +9,28 @@ startIndexer();
 const server = serve({
   routes: {
     // API Endpoints
-    "/api/stats": () => {
+    "/stats": () => {
         const stats = db.prepare('SELECT * FROM global_stats WHERE id = 1').get();
         return Response.json(stats);
     },
     
-    "/api/shards": () => {
+    "/shards": () => {
         const shards = db.prepare('SELECT * FROM shards ORDER BY timestamp DESC LIMIT 50').all();
         return Response.json(shards);
     },
 
-    "/api/pixels": () => {
+    "/pixels": () => {
         const pixels = db.prepare('SELECT * FROM pixel_events ORDER BY timestamp DESC, id DESC LIMIT 100').all();
         return Response.json(pixels);
     },
 
-    "/api/feed": () => {
+    "/feed": () => {
         const pixels = db.prepare('SELECT * FROM pixel_events ORDER BY timestamp DESC, id DESC LIMIT 15').all();
         const shards = db.prepare('SELECT * FROM shards ORDER BY timestamp DESC LIMIT 15').all();
         return Response.json({ pixels, shards });
     },
 
-    "/api/user": (req) => {
+    "/user": (req) => {
         const url = new URL(req.url);
         const address = url.searchParams.get("address");
         if (!address) return new Response("Missing address", { status: 400 });
