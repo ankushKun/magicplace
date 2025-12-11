@@ -152,16 +152,15 @@ function Color({ color, selected, onClick }: { color: string, selected: boolean,
                 "w-full h-10 p-0 relative overflow-visible transition-all duration-200",
                 selected
                     ? "ring-1 ring-zinc-800 scale-105 z-10 shadow-lg"
-                    : "hover:scale-105 hover:shadow opacity-90 hover:opacity-100 ring-1 ring-black/5"
+                    : "hover:scale-105 hover:shadow opacity-90 hover:opacity-100 ring-1 ring-black/30"
             )}
             style={{ backgroundColor: color }}
             onClick={onClick}
             variant={"ghost"}
         >
             <div className="absolute inset-0 flex items-center justify-center">
-                <Brush className={cn("w-5 h-5 bg-blend-darken transition-all duration-200",
-                    selected ? "opacity-100" : "opacity-0",
-                    color == "#FFFFFF" ? "text-black" : "text-white"
+                <Brush className={cn("w-5! h-5! text-black/80! fill-white drop-shadow-black/70 transition-all duration-200",
+                    selected ? "opacity-80" : "opacity-0"
                 )} />
             </div>
             <span className="sr-only">Select color {color}</span>
@@ -262,6 +261,19 @@ export function PixelCanvas() {
         const interval = setInterval(updateCooldown, 5000); // Check every 5s
         return () => clearInterval(interval);
     }, [sessionKey, fetchSessionAccount]);
+
+    // Cooldown Limit Toast
+    useEffect(() => {
+        if (cooldownState.placed >= COOLDOWN_LIMIT) {
+            const now = Math.floor(Date.now() / 1000);
+            // Only show toast if the limit was reached extremely recently (< 2s)
+            // This prevents spam on page refresh if we are mid-cooldown
+            if (now - cooldownState.lastTimestamp < 2) {
+                 toast.error("Limit reached! Wait 30 seconds.");
+                 playFail();
+            }
+        }
+    }, [cooldownState]);
 
     // Readonly mode - hide interactions
     const { isReadonly } = useReadonlyMode();
@@ -1018,7 +1030,7 @@ export function PixelCanvas() {
                 </button>
             </div>
 
-            <div className='absolute top-4 left-16 flex flex-col gap-2 z-40'>
+            <div className='absolute top-8 left-16 flex flex-col gap-2 z-40'>
                 {!isReadonly && (
                     <CooldownTimer 
                         pixelsPlaced={cooldownState.placed}

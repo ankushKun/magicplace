@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 
 interface CooldownTimerProps {
     pixelsPlaced: number;
@@ -19,6 +20,9 @@ export function CooldownTimer({ pixelsPlaced, maxPixels, lastPlaceTimestamp, coo
             if (pixelsPlaced >= maxPixels) {
                 // Saturated: Check if cooldown passed
                 if (elapsed >= cooldownPeriod) {
+                    if (timeLeft > 0) {
+                        toast.success("Cooldown over! You can start placing pixels again.");
+                    }
                     setTimeLeft(0);
                     setEffectivePlaced(0);
                 } else {
@@ -35,82 +39,41 @@ export function CooldownTimer({ pixelsPlaced, maxPixels, lastPlaceTimestamp, coo
         update();
         const timer = setInterval(update, 1000);
         return () => clearInterval(timer);
-    }, [pixelsPlaced, lastPlaceTimestamp, cooldownPeriod, maxPixels]);
+    }, [pixelsPlaced, lastPlaceTimestamp, cooldownPeriod, maxPixels, timeLeft]);
 
-    // Calculate progress
-    // If effectivePlaced is 0, progress is 0.
-    // If effectivePlaced is maxPixels, progress is 100.
-    const percentage = Math.min(100, Math.max(0, (effectivePlaced / maxPixels) * 100));
-    
-    // Circle config
-    const radius = 18;
-    const circumference = 2 * Math.PI * radius;
-    const strokeDashoffset = circumference - (percentage / 100) * circumference;
-    
-    // Determine color based on usage
-    let colorClass = "text-emerald-500";
-    if (percentage > 50) colorClass = "text-yellow-500";
-    if (percentage > 80) colorClass = "text-orange-500";
-    if (percentage >= 100) colorClass = "text-red-500";
+    const isCooldown = effectivePlaced >= maxPixels;
+    const progress = isCooldown
+        ? (timeLeft / cooldownPeriod) * 100
+        : (effectivePlaced / maxPixels) * 100;
 
-    if (effectivePlaced === 0) {
-        // Hide if no pixels placed? Or show clean state?
-        // User asked to act as counter for pixels placed.
-        // Showing 0/100 is good data.
+    let color = '#10b981'; // Emerald-500
+    if (!isCooldown) {
+        if ((effectivePlaced / maxPixels) > 0.6) color = '#eab308'; // Yellow-500
+        if ((effectivePlaced / maxPixels) > 0.8) color = '#f97316'; // Orange-500
+    } else {
+        color = '#ef4444'; // Red-500
     }
 
     return (
-        <div className="flex items-center gap-3 bg-white/95 backdrop-blur shadow-lg rounded-xl px-3 py-2 border border-slate-200/60 transition-all hover:scale-105 select-none">
-            {/* Pie Chart */}
-            <div className="relative w-10 h-10 flex items-center justify-center">
-                <svg className="transform -rotate-90 w-10 h-10">
-                    {/* Background Ring */}
-                    <circle
-                        cx="20"
-                        cy="20"
-                        r={radius}
-                        stroke="currentColor"
-                        strokeWidth="3"
-                        fill="transparent"
-                        className="text-slate-100"
-                    />
-                    {/* Progress Ring */}
-                    <circle
-                        cx="20"
-                        cy="20"
-                        r={radius}
-                        stroke="currentColor"
-                        strokeWidth="3"
-                        fill="transparent"
-                        strokeDasharray={circumference}
-                        strokeDashoffset={strokeDashoffset}
-                        strokeLinecap="round"
-                        className={`${colorClass} transition-all duration-500 ease-out`}
-                    />
-                </svg>
-                {/* Center Icon/Text */}
-                 <div className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-slate-600">
-                    {effectivePlaced}
-                </div>
-            </div>
+        <div className="relative w-10 h-10 flex items-center justify-center rounded-full bg-white/80 backdrop-blur-sm shadow-sm transition-transform hover:scale-105 select-none">
+            {/* Track Background */}
+            <div className="absolute inset-0 rounded-full bg-slate-100" />
+            
+            {/* Conic Gradient Pie */}
+            <div 
+                className="absolute inset-0 rounded-full transition-all duration-500 ease-in-out"
+                style={{ 
+                    background: `conic-gradient(${color} ${progress}%, transparent 0)` 
+                }}
+            />
 
-            {/* Information */}
-            <div className="flex flex-col">
-                <div className="text-[10px] uppercase font-bold text-slate-400 leading-tight">
-                    Burst Limit
-                </div>
-                <div className="flex items-baseline gap-1">
-                    <span className={`text-sm font-bold ${percentage >= 100 ? 'text-red-500' : 'text-slate-700'}`}>
-                        {effectivePlaced}
-                    </span>
-                    <span className="text-xs text-slate-400">/ {maxPixels}</span>
-                </div>
-                {effectivePlaced >= maxPixels && timeLeft > 0 && (
-                     <div className="text-[10px] text-red-500 font-bold leading-tight mt-0.5 animate-pulse">
-                        Maxed Out! {timeLeft}s
-                    </div>
-                )}
+            {/* Inner Mask (Donut center) */}
+            <div className="absolute inset-[3px] rounded-full bg-white flex items-center justify-center">
+                <span className={`text-xs font-bold tracking-tight ${isCooldown ? 'text-red-500' : 'text-slate-600'}`}>
+                    {isCooldown ? timeLeft : effectivePlaced}
+                </span>
             </div>
         </div>
     );
 }
+
