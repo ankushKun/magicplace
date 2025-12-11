@@ -221,6 +221,7 @@ export function PixelCanvas() {
     const [recentUnlockedShards, setRecentUnlockedShards] = useState<{ x: number; y: number; timestamp: number }[]>([]);
     const [highlightShard, setHighlightShard] = useState<{ x: number; y: number } | null>(null);
     const [unlockingShard, setUnlockingShard] = useState<{ x: number; y: number; status: string } | null>(null);
+    const [shardMetadata, setShardMetadata] = useState<Map<string, { creator: string, pixelCount: number }>>(new Map());
 
     // Magicplace program hook for checking shard delegation status
     const {
@@ -306,10 +307,14 @@ export function PixelCanvas() {
 
             const allPixels: PixelData[] = [];
             const newUnlockedShards = new Set<string>();
+            const newMetadata = new Map<string, { creator: string, pixelCount: number }>();
 
             for (const shard of shards) {
+                const shardKey = `${shard.shardX},${shard.shardY}`;
                 // Mark as unlocked
-                newUnlockedShards.add(`${shard.shardX},${shard.shardY}`);
+                newUnlockedShards.add(shardKey);
+
+                let pixelCount = 0;
 
                 // Unpack pixels
                 const pixels = shard.pixels;
@@ -320,6 +325,7 @@ export function PixelCanvas() {
                     // Low nibble (ODD index pixel)
                     const p1 = byte & 0x0F;
                     if (p1 !== 0) {
+                        pixelCount++;
                         const colorHex = PRESET_COLORS[p1 - 1]; // 1-based index
                         if (colorHex) {
                             const localIndex = 2 * i + 1; // Odd
@@ -338,6 +344,7 @@ export function PixelCanvas() {
                     // High nibble (EVEN index pixel)
                     const p2 = (byte >> 4) & 0x0F;
                     if (p2 !== 0) {
+                        pixelCount++;
                         const colorHex = PRESET_COLORS[p2 - 1]; // 1-based index
                         if (colorHex) {
                             const localIndex = 2 * i; // Even
@@ -353,6 +360,20 @@ export function PixelCanvas() {
                         }
                     }
                 }
+                
+                newMetadata.set(shardKey, {
+                    creator: shard.creator.toBase58(),
+                    pixelCount
+                });
+            }
+
+            // Update metadata
+            if (newMetadata.size > 0) {
+                setShardMetadata(prev => {
+                    const next = new Map(prev);
+                    newMetadata.forEach((v, k) => next.set(k, v));
+                    return next;
+                });
             }
 
             // Update unlocked shards state
@@ -836,6 +857,8 @@ export function PixelCanvas() {
                     onUnlockShard={isReadonly ? undefined : handleUnlockShard}
                     highlightShard={highlightShard}
                     hideLockedOverlay={isReadonly}
+                    unlockingShard={unlockingShard}
+                    shardMetadata={shardMetadata}
                 />
             </MapContainer>
 

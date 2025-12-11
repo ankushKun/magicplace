@@ -23,6 +23,7 @@ interface ShardGridOverlayProps {
     highlightShard?: { x: number; y: number } | null;
     hideLockedOverlay?: boolean;
     unlockingShard?: UnlockingShardState | null;
+    shardMetadata?: Map<string, { creator: string, pixelCount: number }>;
 }
 
 /**
@@ -30,7 +31,7 @@ interface ShardGridOverlayProps {
  * Each shard is 128×128 pixels.
  * Improved Implementation: Uses global tracking for performant, jitter-free hover effects.
  */
-export function ShardGridOverlay({ visible, onAggregatedChange, onVisibleShardsChange, alertShard, unlockedShards, onUnlockShard, highlightShard, hideLockedOverlay, unlockingShard }: ShardGridOverlayProps) {
+export function ShardGridOverlay({ visible, onAggregatedChange, onVisibleShardsChange, alertShard, unlockedShards, onUnlockShard, highlightShard, hideLockedOverlay, unlockingShard, shardMetadata }: ShardGridOverlayProps) {
     const map = useLeafletMap();
     const gridLayerRef = useRef<L.LayerGroup | null>(null);
     const labelsLayerRef = useRef<L.LayerGroup | null>(null);
@@ -219,7 +220,7 @@ export function ShardGridOverlay({ visible, onAggregatedChange, onVisibleShardsC
             const zoom = map.getZoom();
             
             // Only relevant when zoomed in
-            const isZoomedInEnough = zoom >= 10;
+            const isZoomedInEnough = zoom >= 12;
             onAggregatedChange?.(!isZoomedInEnough);
             
             if (!isZoomedInEnough) {
@@ -278,13 +279,60 @@ export function ShardGridOverlay({ visible, onAggregatedChange, onVisibleShardsC
                         });
                         gridLayerRef.current!.addLayer(rect);
 
-                        if (zoom >= 10) {
+                        if (zoom >= 12) {
                              const centerLat = (lat1 + lat2) / 2;
                              const centerLon = (lon1 + lon2) / 2;
+                             const metadata = shardMetadata?.get(`${sx},${sy}`);
+                             const isLocked = !unlockedShards?.has(`${sx},${sy}`);
+
+                             let contentHtml = '';
+                             if (isLocked) {
+                                  // Minimal Locked Label
+                                  contentHtml = `
+                                     <div class="px-2 py-1 bg-zinc-950/40 backdrop-blur-sm rounded border border-white/5 text-[10px] text-white/40 font-mono shadow-sm hover:bg-zinc-900/60 transition-colors cursor-default">
+                                         <div class="flex items-center gap-1.5 opacity-60">
+                                             <span class="font-bold tracking-tight">(${sx}, ${sy})</span>
+                                             <span class="w-px h-3 bg-white/10"></span>
+                                             <span>LOCKED</span>
+                                         </div>
+                                     </div>
+                                  `;
+                             } else if (metadata) {
+                                 // Detailed Active Card
+                                 const shortOwner = metadata.creator.slice(0, 4) + '...' + metadata.creator.slice(-4);
+                                 contentHtml = `
+                                     <div class="flex flex-col gap-0.5 px-2.5 py-2 bg-zinc-900/75 backdrop-blur-md rounded-lg border border-white/10 shadow-xl min-w-[110px] hover:border-white/20 hover:bg-zinc-800/80 transition-all cursor-default group">
+                                         <div class="flex items-center justify-between text-[11px] text-white/90 font-bold tracking-tight border-b border-white/10 pb-1 mb-1 group-hover:border-white/20">
+                                             <span>(${sx}, ${sy})</span>
+                                             <span class="text-emerald-400 text-[9px] px-1 py-px bg-emerald-500/10 rounded">ACTIVE</span>
+                                         </div>
+                                         <div class="flex items-center justify-between text-[10px] text-zinc-400">
+                                             <span>Owner</span>
+                                             <span class="font-mono text-zinc-300 ml-2 bg-black/20 px-1 rounded">${shortOwner}</span>
+                                         </div>
+                                         <div class="flex items-center justify-between text-[10px] text-zinc-400">
+                                             <span>Pixels</span>
+                                             <span class="font-mono text-zinc-300 ml-2">${metadata.pixelCount}</span>
+                                         </div>
+                                     </div>
+                                 `;
+                             } else {
+                                 // Active but loading/unknown
+                                  contentHtml = `
+                                     <div class="px-2 py-1 bg-zinc-900/60 backdrop-blur-md rounded border border-white/10 text-[10px] text-white/70 font-mono shadow-sm">
+                                         <div class="flex items-center gap-1.5">
+                                             <span class="font-bold tracking-tight">(${sx}, ${sy})</span>
+                                             <span class="w-px h-3 bg-white/20"></span>
+                                             <span>ACTIVE</span>
+                                         </div>
+                                     </div>
+                                  `;
+                             }
+
                              const label = L.divIcon({
-                                html: `<div class="px-1.5 py-0.5 bg-blue-500/80 text-white text-[10px] font-mono rounded shadow-sm backdrop-blur-sm">(${sx}, ${sy})</div>`,
-                                className: 'flex items-center justify-center',
-                                iconSize: [60, 20],
+                                html: contentHtml,
+                                className: 'flex items-center justify-center pointer-events-auto', // Pointer events auto to allow hover effects on card? actually map handles clicks usually.
+                                iconSize: [140, 80],
                             });
                             labelsLayerRef.current!.addLayer(L.marker([centerLat, centerLon], { icon: label, interactive: false }));
                         }
