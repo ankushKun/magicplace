@@ -35,6 +35,7 @@ import { Avatar, AvatarFallback } from './ui/avatar';
 import { useGunPresence } from '../hooks/use-gun-presence';
 import { divIcon } from 'leaflet';
 import { Marker as LeafletMarker } from 'react-leaflet';
+import "../lib/smooth-zoom"
 
 // Custom Cursor Icon with name label
 const createCursorIcon = (color: string, name: string) => divIcon({
@@ -953,12 +954,15 @@ export function PixelCanvas() {
                 minZoom={MIN_MAP_ZOOM}
                 maxZoom={MAX_MAP_ZOOM}
                 className="w-full h-full"
+                scrollWheelZoom={false} 
+                inertiaMaxSpeed={50}
+                inertia={true}
+                inertiaDeceleration={0}
                 zoomControl={false}
                 worldCopyJump={false}
                 maxBounds={[[-90, -180], [90, 180]]}
-                maxBoundsViscosity={1.0}
+                maxBoundsViscosity={1.5}
                 attributionControl={false}
-                scrollWheelZoom={true}
             >
                 <TileLayer
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
