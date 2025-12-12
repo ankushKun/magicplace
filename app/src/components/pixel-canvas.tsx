@@ -109,6 +109,17 @@ const CompassIcon = () => (
     </svg>
 );
 
+// Format large numbers compactly (1.2K, 10.4K, 1.34M, etc.)
+function formatCompactNumber(num: number): string {
+    if (num >= 1_000_000) {
+        return (num / 1_000_000).toFixed(num >= 10_000_000 ? 1 : 2) + 'M';
+    }
+    if (num >= 1_000) {
+        return (num / 1_000).toFixed(num >= 10_000 ? 1 : 2) + 'K';
+    }
+    return num.toString();
+}
+
 // Component to handle map events
 function MapEventsHandler({ onMapClick, onMapReady, onMoveEnd, onZoomEnd, onMouseMove, onMouseOut }: {
     onMapClick: (lat: number, lng: number) => void;
@@ -1218,7 +1229,7 @@ export function PixelCanvas() {
                     title="Toggle recent shards"
                 >
                     <Unlock className="w-4 h-4" />
-                    <span>{unlockedShards.size.toLocaleString()}</span>
+                    <span>{formatCompactNumber(unlockedShards.size)}</span>
                 </button>
                 {/* Pixels Count - Toggle for Recent Pixels */}
                 <button
@@ -1230,7 +1241,7 @@ export function PixelCanvas() {
                     title="Toggle recent pixels"
                 >
                     <LayoutGrid className='w-4 h-4' />
-                    <span>{placedPixelCount.toLocaleString()}</span>
+                    <span>{formatCompactNumber(placedPixelCount)}</span>
                 </button>
 
                 <WalletConnect onMenuOpenChange={setIsWalletMenuOpen} />
@@ -1241,7 +1252,7 @@ export function PixelCanvas() {
                 <div className="absolute top-16 right-4 z-40 flex flex-col gap-3 max-h-[calc(100vh-200px)]">
                     {/* Recent Pixels Panel */}
                     {showRecentPixels && (
-                        <div className="w-72 bg-white/95 backdrop-blur-sm rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-64">
+                        <div className="w-72 bg-white/60 backdrop-blur-xs rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-64">
                             <div className="p-3 border-b border-slate-200 font-semibold text-slate-700 flex items-center justify-between shrink-0">
                                 <span>Recent Pixels</span>
                                 <button onClick={() => setShowRecentPixels(false)} className="text-slate-400 hover:text-slate-600">✕</button>
@@ -1257,7 +1268,7 @@ export function PixelCanvas() {
                                         return (
                                             <div
                                                 key={`${pixel.px}-${pixel.py}-${pixel.timestamp}`}
-                                                className="p-3 hover:bg-slate-50 transition-colors flex items-center gap-3 border-b border-slate-100 last:border-0"
+                                                className="p-3 hover:bg-slate-50/50 transition-colors flex items-center gap-3 border-b border-slate-100 last:border-0"
                                                 onClick={() => {
                                                     focusOnPixel(pixel.px, pixel.py);
                                                 }}
@@ -1292,7 +1303,7 @@ export function PixelCanvas() {
 
                     {/* Unlocked Shards Panel */}
                     {showRecentShards && (
-                        <div className="w-72 bg-white/95 backdrop-blur-sm rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-64">
+                        <div className="w-72 bg-white/60 backdrop-blur-xs rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-64">
                             <div className="p-3 border-b border-slate-200 font-semibold text-slate-700 flex items-center justify-between shrink-0">
                                 <span className="flex items-center gap-2">
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1313,7 +1324,7 @@ export function PixelCanvas() {
                                         return (
                                             <div
                                                 key={`${shard.x}-${shard.y}`}
-                                                className="p-3 hover:bg-slate-50 transition-colors flex items-center gap-3 border-b border-slate-100 last:border-0"
+                                                className="p-3 hover:bg-slate-50/50 transition-colors flex items-center gap-3 border-b border-slate-100 last:border-0"
                                                 onClick={() => {
                                                     // Navigate to shard center
                                                     const centerPx = (shard.x + 0.5) * SHARD_DIMENSION;
@@ -1358,7 +1369,7 @@ export function PixelCanvas() {
             {/* Bottom Toolbar */}
             <div className="absolute bottom-0 left-0 right-0 z-40 p-4">
                 <div className="max-w-4xl mx-auto">
-                    <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
+                    <div className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-2xl overflow-hidden">
                         {/* Toolbar Header */}
                         <div className="px-4 py-2.5 border-b border-slate-100 flex items-center justify-between w-full">
                             <div className="flex items-center gap-3 w-full">
