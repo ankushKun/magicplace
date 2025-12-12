@@ -245,9 +245,12 @@ export function PixelCanvas() {
         // Could add tile loading here if needed
     }, []);
 
-    // Save map view to localStorage when it changes
+    // Track if user has manually interacted with the map (not auto-focused)
+    const userHasMovedMapRef = useRef(!!savedMapView);
+
+    // Save map view to localStorage when it changes (only if user has moved)
     const saveCurrentMapView = useCallback(() => {
-        if (mapRef.current) {
+        if (mapRef.current && userHasMovedMapRef.current) {
             const center = mapRef.current.getCenter();
             const zoom = mapRef.current.getZoom();
             saveMapView([center.lat, center.lng], zoom);
@@ -354,6 +357,19 @@ export function PixelCanvas() {
                 if (res.ok) {
                     const { pixels, shards } = await res.json();
 
+                    // Calculate pixel counts per shard from feed pixels
+                    const shardPixelCounts = new Map<string, number>();
+                    if (pixels && pixels.length > 0) {
+                        pixels.forEach((p: any) => {
+                            if (p.color > 0) {
+                                const shardX = Math.floor(p.px / SHARD_DIMENSION);
+                                const shardY = Math.floor(p.py / SHARD_DIMENSION);
+                                const shardKey = `${shardX},${shardY}`;
+                                shardPixelCounts.set(shardKey, (shardPixelCounts.get(shardKey) || 0) + 1);
+                            }
+                        });
+                    }
+
                     // Update Pixels
                     if (pixels && pixels.length > 0) {
                         const mappedPixels = pixels.map((p: any) => {
@@ -386,6 +402,21 @@ export function PixelCanvas() {
                             shards.forEach((s: any) => next.add(`${s.shard_x},${s.shard_y}`));
                             return next;
                         });
+
+                        // Populate shardMetadata with pixel counts from feed
+                        setShardMetadata(prev => {
+                            const next = new Map(prev);
+                            shards.forEach((s: any) => {
+                                const shardKey = `${s.shard_x},${s.shard_y}`;
+                                if (!next.has(shardKey)) {
+                                    next.set(shardKey, {
+                                        creator: 'Unknown',
+                                        pixelCount: shardPixelCounts.get(shardKey) || 0
+                                    });
+                                }
+                            });
+                            return next;
+                        });
                     }
                 }
             } catch (e) {
@@ -396,7 +427,7 @@ export function PixelCanvas() {
     }, [isMapReady, bulkUpdateMarkers]);
 
     useEffect(() => {
-        if (fetchedRef.current || isReadonly) return;
+        if (fetchedRef.current) return;
 
         const fetchPixels = async () => {
             // Prevent multiple fetches
@@ -504,7 +535,49 @@ export function PixelCanvas() {
         };
 
         fetchPixels();
-    }, [getAllDelegatedShards, bulkUpdateMarkers, isReadonly]);
+    }, [getAllDelegatedShards, bulkUpdateMarkers]);
+
+    // Auto-focus on a popular shard if first time visiting (no history)
+    const hasAutoFocusedRef = useRef(false);
+    useEffect(() => {
+        // If map isn't ready, or we already focused, or we have a saved view, do nothing
+        if (!isMapReady || hasAutoFocusedRef.current || savedMapView) return;
+
+        // If we have no shard data yet, we can't choose.
+        if (shardMetadata.size === 0) return;
+
+        // Get all shards from metadata
+        const shards = Array.from(shardMetadata.entries()).map(([key, data]) => {
+            const [x, y] = key.split(',').map(Number);
+            return { x, y, pixelCount: data.pixelCount };
+        });
+
+        // Sort by pixel count descending
+        shards.sort((a, b) => b.pixelCount - a.pixelCount);
+
+        // Take top 5
+        const top5 = shards.slice(0, 5);
+
+        if (top5.length > 0) {
+            // Pick random one
+            const randomShard = top5[Math.floor(Math.random() * top5.length)];
+            
+            if (!randomShard || randomShard.x === undefined || randomShard.y === undefined) return;
+
+            console.log("Auto-focusing on popular shard:", randomShard);
+
+            // Calculate center
+            const centerPx = (randomShard.x + 0.5) * SHARD_DIMENSION;
+            const centerPy = (randomShard.y + 0.5) * SHARD_DIMENSION;
+            const { lat, lon } = globalPxToLatLon(centerPx, centerPy);
+
+            // Fly there with animation
+            mapRef.current?.setView([lat, lon], 13, { animate: true });
+            
+            // Mark as done
+            hasAutoFocusedRef.current = true;
+        }
+    }, [isMapReady, shardMetadata, savedMapView, mapRef]);
 
     // Track which shards we're currently checking to avoid duplicate requests
     const checkingShards = useRef<Set<string>>(new Set());
@@ -1040,6 +1113,13 @@ export function PixelCanvas() {
                     }}
                     onMoveEnd={() => {
                         throttledAction();
+                        // Mark that user has manually moved (unless still in auto-focus animation)
+                        if (!userHasMovedMapRef.current && hasAutoFocusedRef.current) {
+                            // Small delay to let auto-focus animation complete before enabling saves
+                            setTimeout(() => { userHasMovedMapRef.current = true; }, 500);
+                        } else {
+                            userHasMovedMapRef.current = true;
+                        }
                         saveCurrentMapView();
                     }}
                     onZoomEnd={() => {
