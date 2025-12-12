@@ -1059,6 +1059,7 @@ export function PixelCanvas() {
                     hideLockedOverlay={isReadonly}
                     unlockingShard={unlockingShard}
                     shardMetadata={shardMetadata}
+                    currentUserPublicKey={wallet.publicKey?.toBase58()}
                 />
                 
                 {/* Live User Cursors */}

@@ -23,6 +23,7 @@ interface ShardGridOverlayProps {
     hideLockedOverlay?: boolean;
     unlockingShard?: UnlockingShardState | null;
     shardMetadata?: Map<string, { creator: string, pixelCount: number }>;
+    currentUserPublicKey?: string;
 }
 
 /**
@@ -30,7 +31,7 @@ interface ShardGridOverlayProps {
  * Each shard is 128×128 pixels.
  * Improved Implementation: Uses global tracking for performant, jitter-free hover effects.
  */
-export function ShardGridOverlay({ visible, onAggregatedChange, onVisibleShardsChange, alertShard, unlockedShards, onUnlockShard, highlightShard, hideLockedOverlay, unlockingShard, shardMetadata }: ShardGridOverlayProps) {
+export function ShardGridOverlay({ visible, onAggregatedChange, onVisibleShardsChange, alertShard, unlockedShards, onUnlockShard, highlightShard, hideLockedOverlay, unlockingShard, shardMetadata, currentUserPublicKey }: ShardGridOverlayProps) {
     const map = useLeafletMap();
     const gridLayerRef = useRef<L.LayerGroup | null>(null);
     const labelsLayerRef = useRef<L.LayerGroup | null>(null);
@@ -298,25 +299,31 @@ export function ShardGridOverlay({ visible, onAggregatedChange, onVisibleShardsC
                                   `;
                              } else if (metadata) {
                                  // Detailed Active Card
+                                 const isOwner = currentUserPublicKey && metadata.creator === currentUserPublicKey;
                                  const shortOwner = metadata.creator.slice(0, 4) + '...' + metadata.creator.slice(-4);
+                                 
+                                 const bgClass = isOwner 
+                                     ? "bg-emerald-900/80 hover:bg-emerald-900/90 border-emerald-500/30 hover:border-emerald-400/50" 
+                                     : "bg-zinc-900/75 hover:bg-zinc-800/80 border-white/10 hover:border-white/20";
+                                     
                                  contentHtml = `
-                                     <div class="flex flex-col gap-0.5 px-2.5 py-2 bg-zinc-900/75 backdrop-blur-md rounded-lg border border-white/10 shadow-xl min-w-[110px] hover:border-white/20 hover:bg-zinc-800/80 transition-all cursor-default group">
+                                     <div class="flex flex-col gap-0.5 px-2.5 py-2 ${bgClass} backdrop-blur-md rounded-lg border shadow-xl min-w-[110px] transition-all cursor-default group">
                                          <div class="flex items-center justify-between text-[11px] text-white/90 font-bold tracking-tight border-b border-white/10 pb-1 mb-1 group-hover:border-white/20">
                                              <span>(${sx}, ${sy})</span>
-                                             <span class="text-emerald-400 text-[9px] px-1 py-px bg-emerald-500/10 rounded">ACTIVE</span>
+                                             <span class="${isOwner ? 'text-emerald-300' : 'text-emerald-400'} text-[9px] px-1 py-px ${isOwner ? 'bg-emerald-500/30' : 'bg-emerald-500/10'} rounded">ACTIVE</span>
                                          </div>
                                          <div class="flex items-center justify-between text-[10px] text-zinc-400">
-                                             <span>Owner</span>
-                                             <span class="font-mono text-zinc-300 ml-2 bg-black/20 px-1 rounded">${shortOwner}</span>
+                                             <span class="${isOwner ? 'text-emerald-200/70' : ''}">Owner</span>
+                                             <span class="font-mono ${isOwner ? 'text-emerald-100 bg-emerald-950/50' : 'text-zinc-300 bg-black/20'} ml-2 px-1 rounded">${isOwner ? 'YOU' : shortOwner}</span>
                                          </div>
                                          <div class="flex items-center justify-between text-[10px] text-zinc-400">
-                                             <span>Pixels</span>
-                                             <span class="font-mono text-zinc-300 ml-2">${metadata.pixelCount}</span>
+                                             <span class="${isOwner ? 'text-emerald-200/70' : ''}">Pixels</span>
+                                             <span class="font-mono ${isOwner ? 'text-emerald-100' : 'text-zinc-300'} ml-2">${metadata.pixelCount}</span>
                                          </div>
                                      </div>
                                  `;
                              } else {
-                                 // Active but loading/unknown
+                                  // Active but loading/unknown
                                   contentHtml = `
                                      <div class="px-2 py-1 bg-zinc-900/60 backdrop-blur-md rounded border border-white/10 text-[10px] text-white/70 font-mono shadow-sm">
                                          <div class="flex items-center gap-1.5">
@@ -352,7 +359,7 @@ export function ShardGridOverlay({ visible, onAggregatedChange, onVisibleShardsC
             map.off('moveend', updateGridAndVisibility);
             map.off('zoomend', updateGridAndVisibility);
         };
-    }, [map, visible, onAggregatedChange, onVisibleShardsChange, unlockedShards, shardMetadata]);
+    }, [map, visible, onAggregatedChange, onVisibleShardsChange, unlockedShards, shardMetadata, currentUserPublicKey]);
 
     // Refs for stable state access without restarting effects
     const activeOverlayRef = useRef<L.ImageOverlay | null>(null);
