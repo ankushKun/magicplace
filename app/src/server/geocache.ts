@@ -77,9 +77,14 @@ async function waitForRateLimit(): Promise<void> {
     lastRequestTime = Date.now();
 }
 
+// Maximum retry attempts for network failures
+const MAX_RETRIES = 3;
+const INITIAL_RETRY_DELAY = 2000; // 2 seconds
+
 /**
  * Get location name for coordinates with persistent database caching
  * Uses shared core logic for API calls and formatting
+ * Retries with exponential backoff on network failures
  */
 export async function getLocationNameCached(lat: number, lon: number): Promise<string> {
     // Check database cache first
@@ -88,25 +93,62 @@ export async function getLocationNameCached(lat: number, lon: number): Promise<s
         return cached;
     }
     
-    try {
-        await waitForRateLimit();
-        
-        const result = await fetchLocationFromAPI(lat, lon);
-        
-        if (!result) {
+    let lastError: any = null;
+    
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+        try {
+            await waitForRateLimit();
+            
+            const result = await fetchLocationFromAPI(lat, lon);
+            
+            if (!result) {
+                // API returned null but didn't throw - this is a legitimate "no data" case
+                // (e.g., API returned an error response for unmapped coordinates)
+                // Cache the fallback for these cases
+                cacheLocation(lat, lon, FALLBACK_LOCATION, false);
+                return FALLBACK_LOCATION;
+            }
+            
+            // Cache and return the formatted display name
+            cacheLocation(lat, lon, result.displayName, result.placeInfo.isWaterBody);
+            return result.displayName;
+            
+        } catch (error: any) {
+            lastError = error;
+            const isNetworkError = error?.code === 'ConnectionRefused' || 
+                                   error?.code === 'ECONNREFUSED' ||
+                                   error?.code === 'ETIMEDOUT' ||
+                                   error?.code === 'ENOTFOUND' ||
+                                   error?.message?.includes('Unable to connect') ||
+                                   error?.message?.includes('fetch failed') ||
+                                   error?.message?.includes('network');
+            
+            if (isNetworkError && attempt < MAX_RETRIES - 1) {
+                // Retry with exponential backoff for network errors
+                const delay = INITIAL_RETRY_DELAY * Math.pow(2, attempt);
+                console.warn(`Geocoding network error (attempt ${attempt + 1}/${MAX_RETRIES}), retrying in ${delay}ms...`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                continue;
+            }
+            
+            // Non-network error or max retries reached
+            console.warn(`Geocoding failed after ${attempt + 1} attempts:`, error);
+            
+            // DON'T cache the fallback for network errors - let it retry next time
+            if (isNetworkError) {
+                console.warn('Network error - NOT caching fallback location, will retry on next request');
+                throw new Error(`Geocoding temporarily unavailable: ${error?.message || 'network error'}`);
+            }
+            
+            // For non-network errors (e.g., parsing errors), cache the fallback
             cacheLocation(lat, lon, FALLBACK_LOCATION, false);
             return FALLBACK_LOCATION;
         }
-        
-        // Cache and return the formatted display name
-        cacheLocation(lat, lon, result.displayName, result.placeInfo.isWaterBody);
-        return result.displayName;
-        
-    } catch (error) {
-        console.warn('Geocoding failed:', error);
-        cacheLocation(lat, lon, FALLBACK_LOCATION, false);
-        return FALLBACK_LOCATION;
     }
+    
+    // Should not reach here, but just in case
+    console.warn('Geocoding: max retries exceeded');
+    throw new Error(`Geocoding failed after ${MAX_RETRIES} attempts: ${lastError?.message || 'unknown error'}`);
 }
 
 /**
