@@ -48,12 +48,24 @@ const locationNameCache = new Map<string, string>();
 
 // LocalStorage key for persisting cache
 const CACHE_STORAGE_KEY = 'magicplace_geocode_cache';
+// Cache version - increment when format changes to invalidate old cache
+const CACHE_VERSION = 4; // v4: 2km grid precision
+const CACHE_VERSION_KEY = 'magicplace_geocode_cache_version';
 
 // Load cache from localStorage on initialization
 function loadCacheFromStorage(): void {
     if (typeof window === 'undefined') return; // SSR guard
     
     try {
+        // Check cache version - if outdated, clear it
+        const storedVersion = localStorage.getItem(CACHE_VERSION_KEY);
+        if (storedVersion !== String(CACHE_VERSION)) {
+            console.log(`📍 Cache version changed (${storedVersion} -> ${CACHE_VERSION}), clearing old cache`);
+            localStorage.removeItem(CACHE_STORAGE_KEY);
+            localStorage.setItem(CACHE_VERSION_KEY, String(CACHE_VERSION));
+            return;
+        }
+        
         const stored = localStorage.getItem(CACHE_STORAGE_KEY);
         if (stored) {
             const parsed = JSON.parse(stored) as Record<string, string>;
@@ -90,8 +102,8 @@ let lastRequestTime = 0;
 const MIN_REQUEST_INTERVAL = 1100; // 1.1 seconds to be safe
 
 // Grid precision for caching (in degrees)
-// 0.1 degrees ≈ 11km at equator - good for cities/regions
-const LAND_GRID_PRECISION = 0.1;
+// 0.02 degrees ≈ 2.2km at equator - more precise city lookups
+const LAND_GRID_PRECISION = 0.02;
 // 1 degree ≈ 111km at equator - good for oceans
 const OCEAN_GRID_PRECISION = 1.0;
 
@@ -222,8 +234,8 @@ export async function reverseGeocode(lat: number, lon: number): Promise<PlaceInf
         // Wait for rate limit
         await waitForRateLimit();
         
-        // Use zoom=3 to get larger features like oceans, then check if we got something useful
-        const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=3&addressdetails=1`;
+        // Use zoom=18 for maximum detail (city/town level)
+        const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`;
         
         const response = await fetch(url, {
             headers: {

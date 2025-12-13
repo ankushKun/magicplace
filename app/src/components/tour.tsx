@@ -707,14 +707,14 @@ export default function Tour() {
                     title="Cooldown Active! ⏳"
                     description={<>You've placed <span className="text-blue-600 font-bold">50 pixels</span>.</>}
                 >
-                    <div className="w-full text-left space-y-2 bg-slate-50 p-3 rounded-xl border border-slate-100">
-                         <p className="text-sm text-slate-600">Wait 30s or:</p>
-                         <ul className="text-sm text-slate-700 space-y-1 font-medium">
-                            <li className="flex items-center gap-2">💎 <span className="text-amber-600">Pay premium</span> to bypass</li>
-                            <li className="flex items-center gap-2">🔓 <span className="text-emerald-600">Unlock shard</span> to bypass forever</li>
-                        </ul>
+                    <div className="w-fit text-center space-y-2 p-3">
+                         <p className="text-sm text-slate-600">Wait 30s or</p>
+                         <div className="text-sm text-slate-700 space-y-1 font-medium">
+                            <div className="flex items-center justify-center gap-2">💎 <span className="text-amber-600">Pay premium</span> to bypass</div>
+                            <div className="flex items-center justify-center gap-2">🔓 <span className="text-emerald-600">Unlock shard</span> to bypass forever</div>
+                        </div>
                     </div>
-                    <Button onClick={() => actions.complete(TourItems.CooldownLimitReached)} className="w-full">
+                    <Button onClick={() => actions.complete(TourItems.CooldownLimitReached)} className="w-fit">
                         Got it!
                     </Button>
                 </TourDialogue>
