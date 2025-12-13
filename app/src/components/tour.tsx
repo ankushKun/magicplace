@@ -85,7 +85,7 @@ interface TourDialogueProps {
 
 function TourDialogue({ title, description, children, footer, className }: TourDialogueProps) {
     return (
-        <div className={`flex flex-col items-center justify-center w-full h-full p-0 gap-1 wrap-break-words ${className || ''}`}>
+        <div className={`flex flex-col items-center justify-center w-full h-full p-0 gap-0.5 wrap-break-words ${className || ''}`}>
             <div className="text-center space-y-0.5 shrink-0">
                 <h2 className="text-lg font-black tracking-tight text-slate-900 leading-tight">{title}</h2>
                 {description && (
@@ -367,7 +367,18 @@ export default function Tour() {
             return (
                 <TourDialogue
                     title={<>Welcome to <span className="text-green-600">pixels.earth</span>! 🎨</>}
-                    description={<div className="text-sm">This is a massive pixel canvas powered by Solana.<br/>Connect your wallet to start creating!</div>}
+                    description={
+                        <div className="text-sm">
+                            This is a massive pixel canvas powered by Solana.<br/>Connect your wallet to start creating!
+                            <div className="flex items-center justify-center gap-1.5 mt-2">
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-amber-100 text-amber-700 border border-amber-200">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                                    Devnet
+                                </span>
+                                <span className="text-xs text-slate-400">Test network</span>
+                            </div>
+                        </div>
+                    }
                     footer={
                         <button 
                             onClick={() => {
@@ -550,6 +561,9 @@ export default function Tour() {
                             <p className="text-sm text-slate-600 leading-snug font-medium">Painting on shards you own is completely <span className="text-emerald-600 font-bold">free</span>.</p>
                         </div>
                     </div>
+                    <p className="text-[10px] text-center text-red-400 font-semibold uppercase tracking-wider">
+                        ⚠️ We have NOT launched any token
+                    </p>
                     <Button onClick={handleOnboardingComplete} className="w-fit mt-0 ">
                         Let's Paint! 🎨
                     </Button>
@@ -609,8 +623,17 @@ export default function Tour() {
             const suggestedAmount = Math.max(0.01, Math.ceil((topupRequest.amountNeeded - (sessionBalance || 0) + 0.005) * 100) / 100)
             return (
                  <TourDialogue
-                    title="Low Session Gas ⛽"
-                    description={topupRequest.reason}
+                    title={<div className="flex gap-2 items-center justify-center">Low Session Gas ⛽<div className="flex items-center justify-center gap-1">
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-amber-100 text-amber-700 border border-amber-200">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                                    Devnet
+                                </span>
+                            </div></div>}
+                    description={
+                        <div className="text-sm flex gap-1 items-center justify-center">
+                            {topupRequest.reason}
+                        </div>
+                    }
                     footer={
                         <a href="https://faucet.solana.com/" target="_blank" className="text-xs text-slate-400 hover:text-slate-600 underline">Need devnet SOL?</a>
                     }
@@ -649,7 +672,17 @@ export default function Tour() {
              return (
                 <TourDialogue
                     title="Connect to Paint 🎨"
-                    description="You need a wallet to leave your mark."
+                    description={
+                        <div className="text-sm">
+                            You need a wallet to leave your mark.
+                            <div className="flex items-center justify-center gap-1.5 mt-1">
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-amber-100 text-amber-700 border border-amber-200">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                                    Devnet
+                                </span>
+                            </div>
+                        </div>
+                    }
                 >
                      {installedWallets.slice(0, 2).map((w) => (
                         <button

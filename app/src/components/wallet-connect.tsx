@@ -387,6 +387,13 @@ export function WalletConnect({ onMenuOpenChange }: WalletConnectProps) {
                     <DialogDescription className="text-slate-500">
                         Select a wallet to connect to MagicPlace
                     </DialogDescription>
+                    <div className="flex items-center gap-1.5 mt-2">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-amber-100 text-amber-700 border border-amber-200">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                            Devnet
+                        </span>
+                        <span className="text-xs text-slate-400">Test network</span>
+                    </div>
                 </DialogHeader>
                 
                 <div className="px-6 pb-6 space-y-4">
@@ -446,7 +453,7 @@ export function WalletConnect({ onMenuOpenChange }: WalletConnectProps) {
                     )}
 
                     {/* Footer */}
-                    <div className="pt-4 border-t border-slate-100">
+                    <div className="pt-4 border-t border-slate-100 space-y-2">
                         <p className="text-xs text-center text-slate-400">
                             New to Solana?{' '}
                             <a 
@@ -457,6 +464,9 @@ export function WalletConnect({ onMenuOpenChange }: WalletConnectProps) {
                             >
                                 Get Phantom
                             </a>
+                        </p>
+                        <p className="text-[10px] text-center text-red-400 font-semibold uppercase tracking-wider">
+                            ⚠️ We have NOT launched any token
                         </p>
                     </div>
                 </div>

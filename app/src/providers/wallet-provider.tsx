@@ -5,9 +5,7 @@ import {
 } from "@solana/wallet-adapter-react";
 import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
 import "@solana/wallet-adapter-react-ui/styles.css";
-
-// Devnet RPC endpoint
-const DEVNET_ENDPOINT = "https://api.devnet.solana.com";
+import { useRpcSettings, getWsEndpoint } from "@/hooks/use-rpc-settings";
 
 interface WalletProviderProps {
     children: ReactNode;
@@ -15,13 +13,15 @@ interface WalletProviderProps {
 
 /**
  * Wallet Provider that wraps the Solana wallet adapter providers.
- * Configured for Devnet by default.
+ * Configured for Devnet by default, but respects user RPC settings.
  */
 export function WalletProvider({ children }: WalletProviderProps) {
+    const { solanaRpc } = useRpcSettings();
+    
     // Convert HTTP endpoint to WebSocket endpoint for subscriptions
     const wsEndpoint = useMemo(() => {
-        return DEVNET_ENDPOINT.replace("https://", "wss://");
-    }, []);
+        return getWsEndpoint(solanaRpc);
+    }, [solanaRpc]);
 
     const config = useMemo(
         () => ({
@@ -32,7 +32,7 @@ export function WalletProvider({ children }: WalletProviderProps) {
     );
 
     return (
-        <ConnectionProvider endpoint={DEVNET_ENDPOINT} config={config}>
+        <ConnectionProvider endpoint={solanaRpc} config={config}>
             <SolanaWalletProvider wallets={[]} autoConnect>
                 <WalletModalProvider>{children}</WalletModalProvider>
             </SolanaWalletProvider>

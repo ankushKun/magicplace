@@ -6,6 +6,7 @@ import { type Magicplace } from "../idl/magicplace";
 import IDL from "../idl/magicplace.json";
 import { SHARD_DIMENSION, SHARDS_PER_DIM } from "../constants";
 import { useSessionKey } from "./use-session-key";
+import { useRpcSettings, getWsEndpoint } from "./use-rpc-settings";
 import { BN } from "@coral-xyz/anchor"; // Ensure BN is available
 
 // Note: @magicblock-labs/ephemeral-rollups-sdk is imported dynamically to avoid
@@ -31,10 +32,6 @@ export interface SessionAccount {
 // Cooldown Constants
 export const COOLDOWN_LIMIT = 50;
 export const COOLDOWN_PERIOD = 30; // seconds
-
-// Ephemeral Rollup endpoints - configurable via environment
-const ER_ENDPOINT = "https://devnet.magicblock.app";
-const ER_WS_ENDPOINT = "wss://devnet.magicblock.app";
 
 // Priority fee for base layer transactions (MicroLamports)
 const PRIORITY_FEE_MICRO_LAMPORTS = 200_000;
@@ -104,6 +101,7 @@ export function useMagicplaceProgram() {
     const { connection } = useConnection();
     const wallet = useWallet();
     const { sessionKey, isActive: sessionActive } = useSessionKey();
+    const { magicblockRpc } = useRpcSettings();
 
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -184,11 +182,11 @@ export function useMagicplaceProgram() {
 
     // Ephemeral Rollup connection
     const erConnection = useMemo(() => {
-        return new Connection(ER_ENDPOINT, {
-            wsEndpoint: ER_WS_ENDPOINT,
+        return new Connection(magicblockRpc, {
+            wsEndpoint: getWsEndpoint(magicblockRpc),
             commitment: "confirmed",
         });
-    }, []);
+    }, [magicblockRpc]);
 
     // ER provider using main wallet (for setup only)
     const erProvider = useMemo(() => {
