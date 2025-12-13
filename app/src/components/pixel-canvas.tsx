@@ -286,6 +286,11 @@ export function PixelCanvas() {
     const [cooldownState, setCooldownState] = useState<{ placed: number, lastTimestamp: number }>({ placed: 0, lastTimestamp: 0 });
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
+    // Track which items have already been seen (to prevent animation on subsequent re-renders)
+    // Items are marked as "seen" via useEffect AFTER they render with animation
+    const seenPixelsRef = useRef<Set<string>>(new Set());
+    const seenShardsRef = useRef<Set<string>>(new Set());
+
     const { sessionKey } = useSessionKey();
     const wallet = useWallet();
 
@@ -1357,24 +1362,32 @@ export function PixelCanvas() {
                                 <span>Recent Pixels</span>
                                 <button onClick={() => setShowRecentPixels(false)} className="text-slate-400 hover:text-slate-600">✕</button>
                             </div>
-                            <div className="overflow-y-auto flex-1">
+                            <div className="overflow-y-auto overflow-x-clip flex-1">
                                 {localPixels.length === 0 ? (
                                     <div className="p-4 text-center text-slate-400 text-sm">
                                         No pixels placed yet. Click on the map to start painting!
                                     </div>
                                 ) : (
-                                    localPixels.slice(0, 20).map((pixel) => {
+                                    localPixels.slice(0, 20).map((pixel, index) => {
                                         const isTransparent = pixel.color === 0;
+                                        const pixelKey = `${pixel.px},${pixel.py}`;
+                                        // Items placed within the last 5 seconds are considered "new"
+                                        // Only animate if not already seen
+                                        const isRecentlyPlaced = (Date.now() / 1000) - pixel.timestamp < 5;
+                                        const shouldAnimate = isRecentlyPlaced && !seenPixelsRef.current.has(pixelKey);
+                                        
                                         return (
                                             <div
                                                 key={`${pixel.px}-${pixel.py}-${pixel.timestamp}`}
-                                                className="p-3 hover:bg-slate-50/50 transition-colors flex items-center gap-3 border-b border-slate-100 last:border-0"
+                                                className={`p-3 hover:bg-slate-50/50 transition-colors flex items-center gap-3 border-b border-slate-100 last:border-0 cursor-pointer ${shouldAnimate ? 'animate-new-pixel' : ''}`}
+                                                style={shouldAnimate ? { animationDelay: `${index * 50}ms` } : undefined}
+                                                onAnimationEnd={() => seenPixelsRef.current.add(pixelKey)}
                                                 onClick={() => {
                                                     focusOnPixel(pixel.px, pixel.py);
                                                 }}
                                             >
                                                 <div
-                                                    className="w-8 h-8 rounded-lg shadow-inner border border-slate-200"
+                                                    className={`w-8 h-8 rounded-lg shadow-inner border border-slate-200 shrink-0 ${shouldAnimate ? 'animate-pop-in' : ''}`}
                                                     style={isTransparent ? {
                                                         backgroundImage: `
                           linear-gradient(45deg, #ccc 25%, transparent 25%),
@@ -1424,11 +1437,19 @@ export function PixelCanvas() {
                                         No shards unlocked yet. Hover over shards and click "Unlock" to start!
                                     </div>
                                 ) : (
-                                    recentUnlockedShards.slice(0, 20).map((shard) => {
+                                    recentUnlockedShards.slice(0, 20).map((shard, index) => {
+                                        const shardKey = `${shard.x},${shard.y}`;
+                                        // Shards unlocked within the last 5 seconds are considered "new"
+                                        // Only animate if not already seen
+                                        const isRecentlyUnlocked = (Date.now() - shard.timestamp) < 5000;
+                                        const shouldAnimate = isRecentlyUnlocked && !seenShardsRef.current.has(shardKey);
+                                        
                                         return (
                                             <div
                                                 key={`${shard.x}-${shard.y}`}
-                                                className="p-3 hover:bg-slate-50/50 transition-colors flex items-center gap-3 border-b border-slate-100 last:border-0"
+                                                className={`p-3 hover:bg-slate-50/50 transition-colors flex items-center gap-3 border-b border-slate-100 last:border-0 cursor-pointer ${shouldAnimate ? 'animate-new-shard' : ''}`}
+                                                style={shouldAnimate ? { animationDelay: `${index * 50}ms` } : undefined}
+                                                onAnimationEnd={() => seenShardsRef.current.add(shardKey)}
                                                 onClick={() => {
                                                     // Navigate to shard center
                                                     const centerPx = (shard.x + 0.5) * SHARD_DIMENSION;
@@ -1444,7 +1465,7 @@ export function PixelCanvas() {
                                                     }, 300);
                                                 }}
                                             >
-                                                <div className="w-8 h-8 rounded-lg shadow-inner border border-emerald-200 bg-linear-to-br from-emerald-400 to-emerald-600 flex items-center justify-center">
+                                                <div className={`w-8 h-8 rounded-lg shadow-inner border border-emerald-200 bg-linear-to-br from-emerald-400 to-emerald-600 flex items-center justify-center shrink-0 ${shouldAnimate ? 'animate-pop-in' : ''}`}>
                                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                                         <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
                                                         <path d="M7 11V7a5 5 0 0 1 9.9-1" />

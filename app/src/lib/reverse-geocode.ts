@@ -46,6 +46,45 @@ const geocodeCache = new Map<string, PlaceInfo>();
 // Quick string cache: maps grid key directly to location name string
 const locationNameCache = new Map<string, string>();
 
+// LocalStorage key for persisting cache
+const CACHE_STORAGE_KEY = 'magicplace_geocode_cache';
+
+// Load cache from localStorage on initialization
+function loadCacheFromStorage(): void {
+    if (typeof window === 'undefined') return; // SSR guard
+    
+    try {
+        const stored = localStorage.getItem(CACHE_STORAGE_KEY);
+        if (stored) {
+            const parsed = JSON.parse(stored) as Record<string, string>;
+            Object.entries(parsed).forEach(([key, name]) => {
+                locationNameCache.set(key, name);
+            });
+            console.log(`📍 Loaded ${locationNameCache.size} cached locations from storage`);
+        }
+    } catch (e) {
+        // Ignore parse errors
+    }
+}
+
+// Save cache to localStorage
+function saveCacheToStorage(): void {
+    if (typeof window === 'undefined') return; // SSR guard
+    
+    try {
+        const obj: Record<string, string> = {};
+        locationNameCache.forEach((value, key) => {
+            obj[key] = value;
+        });
+        localStorage.setItem(CACHE_STORAGE_KEY, JSON.stringify(obj));
+    } catch (e) {
+        // Ignore storage errors (quota exceeded, etc.)
+    }
+}
+
+// Initialize cache from storage
+loadCacheFromStorage();
+
 // Rate limiting: Nominatim requires max 1 request per second
 let lastRequestTime = 0;
 const MIN_REQUEST_INTERVAL = 1100; // 1.1 seconds to be safe
@@ -87,6 +126,7 @@ function getNearbyGridKeys(lat: number, lon: number, precision: number = LAND_GR
 
 /**
  * Check if a cached location is nearby - returns cached value if found
+ * Checks both in-memory cache and localStorage-loaded cache
  */
 function findNearbyCache(lat: number, lon: number): { place: PlaceInfo | null; name: string | null } {
     // First check the exact grid cell
@@ -95,6 +135,13 @@ function findNearbyCache(lat: number, lon: number): { place: PlaceInfo | null; n
         return { 
             place: geocodeCache.get(exactKey)!, 
             name: locationNameCache.get(exactKey) || null 
+        };
+    }
+    // Check locationNameCache even if PlaceInfo isn't cached (loaded from storage)
+    if (locationNameCache.has(exactKey)) {
+        return { 
+            place: null, 
+            name: locationNameCache.get(exactKey)! 
         };
     }
     
@@ -107,6 +154,12 @@ function findNearbyCache(lat: number, lon: number): { place: PlaceInfo | null; n
                 name: locationNameCache.get(key) || null 
             };
         }
+        if (locationNameCache.has(key)) {
+            return { 
+                place: null, 
+                name: locationNameCache.get(key)! 
+            };
+        }
     }
     
     // Also check with ocean precision for water bodies
@@ -117,18 +170,27 @@ function findNearbyCache(lat: number, lon: number): { place: PlaceInfo | null; n
             name: locationNameCache.get(oceanKey) || null 
         };
     }
+    if (locationNameCache.has(oceanKey)) {
+        return { 
+            place: null, 
+            name: locationNameCache.get(oceanKey)! 
+        };
+    }
     
     return { place: null, name: null };
 }
 
 /**
- * Store a location in both caches
+ * Store a location in both caches and persist to localStorage
  */
 function cacheLocation(lat: number, lon: number, place: PlaceInfo, locationName: string): void {
     const precision = place.isWaterBody ? OCEAN_GRID_PRECISION : LAND_GRID_PRECISION;
     const key = getGridKey(lat, lon, precision);
     geocodeCache.set(key, place);
     locationNameCache.set(key, locationName);
+    
+    // Persist to localStorage (debounced via async)
+    saveCacheToStorage();
 }
 
 /**
