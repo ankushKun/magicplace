@@ -241,7 +241,13 @@ export async function reverseGeocode(lat: number, lon: number): Promise<PlaceInf
         // Check for error response (common for ocean coordinates)
         if (data.error) {
             // For ocean areas, Nominatim often returns an error
-            return getOceanName(lat, lon);
+            return {
+                name: "Secret Location",
+                region: undefined,
+                country: undefined,
+                fullName: "Secret Location",
+                isWaterBody: false,
+            };
         }
 
         // Check if we got a water body
@@ -265,98 +271,74 @@ export async function reverseGeocode(lat: number, lon: number): Promise<PlaceInf
         }
         
         if (!data.address) {
-            // No address - might be in an ocean
-            return getOceanName(lat, lon);
+            return {
+                name: "Secret Location",
+                region: undefined,
+                country: undefined,
+                fullName: "Secret Location",
+                isWaterBody: false,
+            }
         }
         
-        // Get the most specific land place name available
-        const placeName = 
+        // Get the most specific land place name available (city-level)
+        const cityName = 
             data.address.city ||
             data.address.town ||
             data.address.village ||
             data.address.hamlet ||
             data.address.municipality ||
-            data.address.county ||
-            data.address.state ||
-            data.address.country ||
-            'Unknown location';
+            null;
+        
+        // Get region/state level
+        const regionName = data.address.state || data.address.county || null;
+        
+        // Get country
+        const countryName = data.address.country || null;
+        
+        // Build the display name - prioritize "City, Country/State" format
+        let displayName: string;
+        
+        if (cityName) {
+            // We have a city - format as "City, Country" or "City, State" for US
+            if (countryName === 'United States' && regionName) {
+                displayName = `${cityName}, ${regionName}`;
+            } else if (countryName) {
+                displayName = `${cityName}, ${countryName}`;
+            } else if (regionName) {
+                displayName = `${cityName}, ${regionName}`;
+            } else {
+                displayName = cityName;
+            }
+        } else if (regionName) {
+            // No city, but have region - format as "Region, Country"
+            if (countryName && regionName !== countryName) {
+                displayName = `${regionName}, ${countryName}`;
+            } else {
+                displayName = regionName;
+            }
+        } else if (countryName) {
+            // Only country available
+            displayName = countryName;
+        } else {
+            displayName = 'Unknown location';
+        }
         
         const placeInfo: PlaceInfo = {
-            name: placeName,
-            region: data.address.state || data.address.county,
-            country: data.address.country,
-            fullName: data.display_name || placeName,
+            name: cityName || regionName || countryName || 'Unknown location',
+            region: regionName || undefined,
+            country: countryName || undefined,
+            fullName: data.display_name || displayName,
             isWaterBody: false,
         };
         
-        // Build location name string
-        let locationName = placeName;
-        if (placeInfo.country === 'United States' && placeInfo.region) {
-            locationName = `${placeName}, ${placeInfo.region}`;
-        } else if (placeInfo.country && placeName !== placeInfo.country) {
-            locationName = `${placeName}, ${placeInfo.country}`;
-        }
-        
-        // Cache the result
-        cacheLocation(lat, lon, placeInfo, locationName);
+        // Cache the result with the properly formatted display name
+        cacheLocation(lat, lon, placeInfo, displayName);
         
         return placeInfo;
     } catch (error) {
         console.warn('Reverse geocoding failed:', error);
         return null;
     }
-}
-
-/**
- * Get ocean name based on coordinates using a simple geographic lookup
- * This is a fallback when Nominatim doesn't return ocean data
- */
-function getOceanName(lat: number, lon: number): PlaceInfo {
-    // Simple ocean detection based on coordinates
-    // This is an approximation - real-world ocean boundaries are complex
-    let oceanName = 'International Waters';
-    
-    // Pacific Ocean
-    if (lon > 100 || lon < -100) {
-        if (lat > 0) {
-            oceanName = 'North Pacific Ocean';
-        } else {
-            oceanName = 'South Pacific Ocean';
-        }
-    }
-    // Atlantic Ocean
-    else if (lon > -80 && lon < 0) {
-        if (lat > 0) {
-            oceanName = 'North Atlantic Ocean';
-        } else {
-            oceanName = 'South Atlantic Ocean';
-        }
-    }
-    // Indian Ocean
-    else if (lon > 20 && lon < 100 && lat < 25) {
-        oceanName = 'Indian Ocean';
-    }
-    // Arctic Ocean
-    else if (lat > 66) {
-        oceanName = 'Arctic Ocean';
-    }
-    // Southern Ocean (Antarctic)
-    else if (lat < -60) {
-        oceanName = 'Southern Ocean';
-    }
-
-    const placeInfo: PlaceInfo = {
-        name: oceanName,
-        region: undefined,
-        country: undefined,
-        fullName: oceanName,
-        isWaterBody: true,
-    };
-
-    // Cache with ocean precision
-    cacheLocation(lat, lon, placeInfo, oceanName);
-
-    return placeInfo;
 }
 
 /**
@@ -377,9 +359,7 @@ export async function getLocationName(lat: number, lon: number): Promise<string>
     const place = await reverseGeocode(lat, lon);
     
     if (!place) {
-        // Fall back to ocean detection
-        const ocean = getOceanName(lat, lon);
-        return ocean.name;
+        return "Secret Location"
     }
 
     // Water bodies don't need country suffix
@@ -388,11 +368,29 @@ export async function getLocationName(lat: number, lon: number): Promise<string>
     }
     
     // Build a concise name: "City, Country" or "City, State" for US
-    let locationName = place.name;
-    if (place.country === 'United States' && place.region) {
-        locationName = `${place.name}, ${place.region}`;
-    } else if (place.country && place.name !== place.country) {
-        locationName = `${place.name}, ${place.country}`;
+    let locationName: string;
+    
+    if (place.name && place.name !== place.country && place.name !== place.region) {
+        // We have a specific city/town name
+        if (place.country === 'United States' && place.region) {
+            locationName = `${place.name}, ${place.region}`;
+        } else if (place.country) {
+            locationName = `${place.name}, ${place.country}`;
+        } else if (place.region) {
+            locationName = `${place.name}, ${place.region}`;
+        } else {
+            locationName = place.name;
+        }
+    } else if (place.region && place.region !== place.country) {
+        // Only region available
+        if (place.country) {
+            locationName = `${place.region}, ${place.country}`;
+        } else {
+            locationName = place.region;
+        }
+    } else {
+        // Fallback to whatever we have
+        locationName = place.country || place.name || 'Unknown location';
     }
     
     return locationName;
