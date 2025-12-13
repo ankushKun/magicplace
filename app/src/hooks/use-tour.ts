@@ -27,13 +27,21 @@ enum TourItems {
     LowSessionBalance       // Session balance too low for action
 }
 
+interface LockedShardInfo {
+    x: number;
+    y: number;
+    onUnlock?: () => void;
+}
+
 type TourStateType = {
     items: { [key in TourItems]: TourStateValues }
+    lockedShard: LockedShardInfo | null
     actions: {
         complete: (state: TourItems) => void
         start: (state: TourItems) => void
         forceStart: (state: TourItems) => void
         reset: () => void
+        setLockedShard: (shard: LockedShardInfo | null) => void
     }
 }
 
@@ -55,6 +63,7 @@ const defaultItems = {
 
 const useTour = create<TourStateType>()(persist((set) => ({
     items: { ...defaultItems },
+    lockedShard: null,
     actions: {
         complete: (item: TourItems) => {
             set((state) => ({
@@ -92,6 +101,9 @@ const useTour = create<TourStateType>()(persist((set) => ({
                 items: { ...defaultItems }
             })
         },
+        setLockedShard: (shard: LockedShardInfo | null) => {
+            set({ lockedShard: shard })
+        }
 
     }
 
@@ -103,10 +115,12 @@ const useTour = create<TourStateType>()(persist((set) => ({
 
 const useTourActions = () => { return useTour(state => state.actions) }
 const useTourItems = () => { return useTour(state => state.items) }
+const useLockedShard = () => { return useTour(state => state.lockedShard) }
 
 export {
     useTourItems,
     useTourActions,
+    useLockedShard,
 
     TourItems,
     TourStateValues

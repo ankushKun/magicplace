@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useSessionKey } from "@/hooks/use-session-key"
-import { useTourActions, useTourItems, TourItems, TourStateValues } from "../hooks/use-tour"
+import { useTourActions, useTourItems, useLockedShard, TourItems, TourStateValues } from "../hooks/use-tour"
 import { getNickname, setNickname } from "@/hooks/use-gun-presence"
 import Character from "./character"
 import { Button } from "./ui/button"
@@ -119,6 +119,7 @@ function TourDialogue({ title, description, children, footer, className }: TourD
 export default function Tour() {
     const items = useTourItems()
     const actions = useTourActions()
+    const lockedShard = useLockedShard()
     const { sessionKey, isActive: sessionActive, createSessionKey, isLoading: sessionLoading, isRestoring } = useSessionKey()
     const { connection } = useConnection()
     const wallet = useWallet()
@@ -591,9 +592,25 @@ export default function Tour() {
                        </div>
                     </div>}
                 >
-                    <Button onClick={() => actions.complete(TourItems.ClickedOnLockedShard)} className="w-">
-                        Got it!
-                    </Button>
+                    <div className="flex gap-2 w-fit">
+                        <Button variant="outline" onClick={() => actions.complete(TourItems.ClickedOnLockedShard)}>
+                            Got it!
+                        </Button>
+                        <Button 
+                            onClick={() => {
+                                actions.complete(TourItems.ClickedOnLockedShard);
+                                // Trigger unlock via custom event - pixel-canvas listens
+                                if (lockedShard) {
+                                    window.dispatchEvent(new CustomEvent('unlock-shard', { 
+                                        detail: { x: lockedShard.x, y: lockedShard.y } 
+                                    }));
+                                }
+                            }}
+                            className="bg-emerald-500 hover:bg-emerald-600"
+                        >
+                            Unlock Shard 🔓
+                        </Button>
+                    </div>
                 </TourDialogue>
             )
         }
@@ -755,7 +772,8 @@ export default function Tour() {
         handleTopup, 
         handleCancelTopup,
         setNickname,
-        setHasExplored
+        setHasExplored,
+        lockedShard
     ])
 
     return (

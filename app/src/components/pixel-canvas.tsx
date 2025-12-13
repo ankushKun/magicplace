@@ -21,7 +21,7 @@ import {
 } from '../constants';
 import { WalletConnect } from './wallet-connect';
 import { Button } from './ui/button';
-import { Brush, Eraser, Grid2X2, Grid3X3, LayoutGrid, ScanEye, Settings, Unlock, Volume2, VolumeX } from 'lucide-react';
+import { Brush, Eraser, Grid2X2, Grid3X3, LayoutGrid, ScanEye, Search, Settings, Unlock, Volume2, VolumeX } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useGameSounds } from '../hooks/use-game-sounds';
 import { useMagicplaceProgram, COOLDOWN_LIMIT, COOLDOWN_PERIOD } from '../hooks/use-magicplace-program';
@@ -39,6 +39,7 @@ import { Marker as LeafletMarker } from 'react-leaflet';
 import "../lib/smooth-zoom"
 import { useTourActions, TourItems } from '../hooks/use-tour';
 import { SettingsDialog } from './settings-dialog';
+import { LocationSearch } from './location-search';
 
 // Custom Cursor Icon with name label
 const createCursorIcon = (color: string, name: string) => divIcon({
@@ -285,6 +286,7 @@ export function PixelCanvas() {
     const [shardMetadata, setShardMetadata] = useState<Map<string, { creator: string, pixelCount: number }>>(new Map());
     const [cooldownState, setCooldownState] = useState<{ placed: number, lastTimestamp: number }>({ placed: 0, lastTimestamp: 0 });
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    const [isSearchOpen, setIsSearchOpen] = useState(false);
 
     // Track which items have already been seen (to prevent animation on subsequent re-renders)
     // Items are marked as "seen" via useEffect AFTER they render with animation
@@ -681,9 +683,8 @@ export function PixelCanvas() {
         return !unlockedShards.has(shardKey);
     }, [unlockedShards]);
 
-    // Zoom to show a locked shard
+    // Show locked shard dialog (zoom in if zoomed out, but never zoom out)
     const zoomToLockedShard = useCallback((px: number, py: number) => {
-        actions.forceStart(TourItems.ClickedOnLockedShard);
         if (!mapRef.current) return;
 
         const shardX = Math.floor(px / SHARD_DIMENSION);
@@ -694,18 +695,24 @@ export function PixelCanvas() {
         const centerPy = (shardY + 0.5) * SHARD_DIMENSION;
         const { lat, lon } = globalPxToLatLon(centerPx, centerPy);
 
-        // Check if already at approximately zoom 13
+        // Only zoom IN if user is zoomed out (below level 13)
+        // Never zoom OUT if user is already zoomed in
         const currentZoomLevel = mapRef.current.getZoom();
-        if (Math.abs(currentZoomLevel - 13) < 0.5) {
-            // Already at zoom 13, still center and trigger pulse animation
-            mapRef.current.setView([lat, lon], 13, { animate: true });
-            setLockedShardAlert({ x: shardX, y: shardY });
-            // Clear after animation
-            setTimeout(() => setLockedShardAlert(null), 600);
-        } else {
-            // Zoom out to level 13 and center on shard
-            mapRef.current.setView([lat, lon], 13, { animate: true });
+        if (currentZoomLevel < 13) {
+            mapRef.current.flyTo([lat, lon], 13, { duration: 0.5 });
         }
+
+        // Store the locked shard coordinates for visual highlight
+        setLockedShardAlert({ x: shardX, y: shardY });
+        
+        // Store shard info in tour store for the unlock button
+        actions.setLockedShard({ x: shardX, y: shardY });
+        
+        // Show the dialog
+        actions.forceStart(TourItems.ClickedOnLockedShard);
+        
+        // Clear visual highlight after animation
+        setTimeout(() => setLockedShardAlert(null), 600);
     }, [mapRef, actions]);
 
     // Place pixel at coordinates
@@ -957,6 +964,17 @@ export function PixelCanvas() {
         }
     }, [playPop, playUnlock, playFail, initializeShard, estimateShardUnlockCost, checkBalance, refreshBalance, unlockingShard, wallet.publicKey]);
 
+    // Listen for unlock-shard events from Tour component
+    useEffect(() => {
+        const handleUnlockShardEvent = (event: CustomEvent<{ x: number; y: number }>) => {
+            handleUnlockShard(event.detail.x, event.detail.y);
+        };
+
+        window.addEventListener('unlock-shard', handleUnlockShardEvent as EventListener);
+        return () => {
+            window.removeEventListener('unlock-shard', handleUnlockShardEvent as EventListener);
+        };
+    }, [handleUnlockShard]);
 
 
     // Place pixel at selected location
@@ -1134,7 +1152,7 @@ export function PixelCanvas() {
     }, [selectedPixel]);
 
     return (
-        <div className="h-dvh w-screen overflow-hidden bg-slate-900 relative">
+        <div className="h-dvh w-screen overflow-hidden bg-zinc-100 relative">
             {/* Full-screen Map */}
             <MapContainer
                 center={initialCenter}
@@ -1251,6 +1269,7 @@ export function PixelCanvas() {
                 >
                     −
                 </button>
+                <div className='h-0.5 bg-white'/>
                 <button
                     onClick={() => {
                         const shardsArray = Array.from(unlockedShards).map(key => {
@@ -1307,6 +1326,14 @@ export function PixelCanvas() {
                     title="Toggle shard grid"
                 >
                     <ScanEye className='w-5 h-5'/>
+                </button>
+                {/* search button */}
+                <button
+                    onClick={() => setIsSearchOpen(true)}
+                    className="w-8 h-8 rounded-lg shadow-lg flex items-center justify-center transition-colors bg-white text-slate-700 hover:bg-slate-50"
+                    title="Search for a location"
+                >
+                    <Search className='w-4 h-4'/>
                 </button>
             </div>
 
@@ -1672,6 +1699,20 @@ export function PixelCanvas() {
                 </div>
             )}
             <SettingsDialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen} />
+            <LocationSearch
+                isOpen={isSearchOpen}
+                onClose={() => setIsSearchOpen(false)}
+                onLocationSelect={(lat, lon, name, zoomLevel) => {
+                    if (mapRef.current) {
+                        // Fly to the selected location with dynamic zoom based on location type
+                        mapRef.current.flyTo([lat, lon], zoomLevel, {
+                            duration: 1.5,
+                        });
+                        userHasMovedMapRef.current = true;
+                        toast.success(`Navigating to ${name}`);
+                    }
+                }}
+            />
         </div>
     );
 }

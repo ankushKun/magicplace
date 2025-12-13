@@ -161,6 +161,6 @@
     @apply border-border outline-ring/50 font-ubuntu;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-white text-foreground;
   }
 }
