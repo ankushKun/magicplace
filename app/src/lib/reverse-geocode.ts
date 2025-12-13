@@ -166,13 +166,12 @@ export async function reverseGeocode(lat: number, lon: number): Promise<PlaceInf
         const result = await fetchLocationFromAPI(lat, lon);
         
         if (!result) {
-            // Return fallback
+            // DON'T cache the fallback - let it retry next time
             const fallbackPlace: PlaceInfo = {
                 name: FALLBACK_LOCATION,
                 fullName: FALLBACK_LOCATION,
                 isWaterBody: false,
             };
-            cacheLocation(lat, lon, fallbackPlace, FALLBACK_LOCATION);
             return fallbackPlace;
         }
         
