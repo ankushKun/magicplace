@@ -3,6 +3,7 @@ import { useMap, type PixelData } from '../hooks/use-map';
 import { toast } from 'sonner';
 import { hexToUint32, uint32ToHex } from '../lib/colors';
 import { latLonToGlobalPx, globalPxToLatLon } from '../lib/projection';
+import { getLocationName } from '../lib/reverse-geocode';
 import { MapContainer, TileLayer, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { ShardGridOverlay } from './shard-grid-overlay';
@@ -278,7 +279,7 @@ export function PixelCanvas() {
     const [showRecentShards, setShowRecentShards] = useState(() => typeof window !== 'undefined' ? window.innerWidth >= 768 : true);
     const [lockedShardAlert, setLockedShardAlert] = useState<{ x: number; y: number } | null>(null);
     const [unlockedShards, setUnlockedShards] = useState<Set<string>>(new Set());
-    const [recentUnlockedShards, setRecentUnlockedShards] = useState<{ x: number; y: number; timestamp: number }[]>([]);
+    const [recentUnlockedShards, setRecentUnlockedShards] = useState<{ x: number; y: number; timestamp: number; locationName?: string }[]>([]);
     const [highlightShard, setHighlightShard] = useState<{ x: number; y: number } | null>(null);
     const [unlockingShard, setUnlockingShard] = useState<{ x: number; y: number; status: string } | null>(null);
     const [shardMetadata, setShardMetadata] = useState<Map<string, { creator: string, pixelCount: number }>>(new Map());
@@ -378,7 +379,8 @@ export function PixelCanvas() {
                                 px: p.px,
                                 py: p.py,
                                 color: colorHex ? hexToUint32(colorHex) : 0,
-                                timestamp: p.timestamp
+                                timestamp: p.timestamp,
+                                locationName: p.location_name || undefined // Include location from API
                             };
                         });
                         bulkUpdateMarkers(mappedPixels.reverse());
@@ -390,11 +392,28 @@ export function PixelCanvas() {
                             const mapped = shards.map((s: any) => ({
                                 x: s.shard_x,
                                 y: s.shard_y,
-                                timestamp: s.timestamp
+                                timestamp: s.timestamp,
+                                locationName: s.location_name || undefined // Include location from API
                             }));
                             const map = new Map();
                             [...mapped, ...prev].forEach(s => map.set(`${s.x},${s.y}`, s));
-                            return Array.from(map.values()).sort((a: any, b: any) => b.timestamp - a.timestamp).slice(0, 50);
+                            const result = Array.from(map.values()).sort((a: any, b: any) => b.timestamp - a.timestamp).slice(0, 50);
+                            
+                            // Fetch missing location names for first 10 shards without them
+                            result.slice(0, 10).forEach((shard: any) => {
+                                if (!shard.locationName) {
+                                    const centerPx = (shard.x + 0.5) * SHARD_DIMENSION;
+                                    const centerPy = (shard.y + 0.5) * SHARD_DIMENSION;
+                                    const { lat, lon } = globalPxToLatLon(centerPx, centerPy);
+                                    getLocationName(lat, lon).then(locationName => {
+                                        setRecentUnlockedShards(current => current.map(s => 
+                                            (s.x === shard.x && s.y === shard.y) ? { ...s, locationName } : s
+                                        ));
+                                    });
+                                }
+                            });
+                            
+                            return result;
                         });
 
                         setUnlockedShards(prev => {
@@ -878,6 +897,16 @@ export function PixelCanvas() {
                 return [newShard, ...filtered].slice(0, 50);
             });
 
+            // Fetch location name asynchronously for the newly unlocked shard
+            const centerPx = (shardX + 0.5) * SHARD_DIMENSION;
+            const centerPy = (shardY + 0.5) * SHARD_DIMENSION;
+            const { lat, lon } = globalPxToLatLon(centerPx, centerPy);
+            getLocationName(lat, lon).then(locationName => {
+                setRecentUnlockedShards(current => current.map(s => 
+                    (s.x === shardX && s.y === shardY) ? { ...s, locationName } : s
+                ));
+            });
+
             // Show congratulations dialog for first-time unlock
             actions.start(TourItems.UnlockedShard);
 
@@ -1024,6 +1053,16 @@ export function PixelCanvas() {
                 // Remove if already exists, add to front
                 const filtered = prev.filter(s => !(s.x === x && s.y === y));
                 return [newShard, ...filtered].slice(0, 50);
+            });
+
+            // Fetch location name asynchronously for the new shard
+            const centerPx = (x + 0.5) * SHARD_DIMENSION;
+            const centerPy = (y + 0.5) * SHARD_DIMENSION;
+            const { lat, lon } = globalPxToLatLon(centerPx, centerPy);
+            getLocationName(lat, lon).then(locationName => {
+                setRecentUnlockedShards(current => current.map(s => 
+                    (s.x === x && s.y === y) ? { ...s, locationName } : s
+                ));
             });
 
             // Optional: Provide visual feedback?
@@ -1348,9 +1387,13 @@ export function PixelCanvas() {
                                                         backgroundColor: '#fff'
                                                     } : { backgroundColor: uint32ToHex(pixel.color) }}
                                                 />
-                                                <div>
-                                                    <div className="text-sm font-medium text-slate-700">
-                                                        ({pixel.px}, {pixel.py})
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="text-sm font-medium text-slate-700 truncate">
+                                                        {pixel.locationName ? (
+                                                            <>at {pixel.locationName}</>
+                                                        ) : (
+                                                            <>({pixel.px}, {pixel.py})</>
+                                                        )}
                                                         {isTransparent && <span className="text-slate-400 ml-1 text-xs">(erased)</span>}
                                                     </div>
                                                 </div>
@@ -1407,9 +1450,13 @@ export function PixelCanvas() {
                                                         <path d="M7 11V7a5 5 0 0 1 9.9-1" />
                                                     </svg>
                                                 </div>
-                                                <div className="flex-1">
-                                                    <div className="text-sm font-medium text-slate-700">
-                                                        Shard ({shard.x}, {shard.y})
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="text-sm font-medium text-slate-700 truncate">
+                                                        {shard.locationName ? (
+                                                            <>at {shard.locationName}</>
+                                                        ) : (
+                                                            <>Shard ({shard.x}, {shard.y})</>
+                                                        )}
                                                     </div>
                                                 </div>
                                                 <div className="text-emerald-500">

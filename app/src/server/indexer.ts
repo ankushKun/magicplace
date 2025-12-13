@@ -2,6 +2,8 @@ import { Connection, Keypair } from "@solana/web3.js";
 import { Program, AnchorProvider, Wallet, EventParser } from "@coral-xyz/anchor";
 import db from "./db";
 import idl from "../idl/magicplace.json";
+import { getLocationForPixel, getLocationForShard } from "./geocache";
+import { SHARD_DIMENSION } from "../constants";
 
 // Constants
 const BASE_RPC = "https://api.devnet.solana.com";
@@ -27,15 +29,19 @@ const erProgram = new Program(idl, erProvider);
 function updatePixelStats(event: any) {
     const { px, py, color, painter, mainWallet, timestamp } = event;
     const wallet = mainWallet.toBase58();
+    const pxNum = Number(px);
+    const pyNum = Number(py);
+    const timestampNum = timestamp.toNumber();
     
-    console.log(`[Pixel] (${px},${py}) Color:${color} by ${wallet.slice(0, 8)}...`);
+    console.log(`[Pixel] (${pxNum},${pyNum}) Color:${color} by ${wallet.slice(0, 8)}...`);
 
     db.prepare('UPDATE global_stats SET total_pixels_placed = total_pixels_placed + 1 WHERE id = 1').run();
     
-    db.prepare(`
+    // Insert pixel event (location_name will be updated async)
+    const result = db.prepare(`
         INSERT INTO pixel_events (px, py, color, main_wallet, timestamp)
         VALUES (?, ?, ?, ?, ?)
-    `).run(px, py, color, wallet, timestamp.toNumber());
+    `).run(pxNum, pyNum, color, wallet, timestampNum);
 
     db.prepare(`
         INSERT INTO users (main_wallet, pixels_placed_count) 
@@ -53,19 +59,37 @@ function updatePixelStats(event: any) {
              // ignore
         }
     }
+
+    // Async: Fetch location name and update the record (fire-and-forget)
+    const insertId = result.lastInsertRowid;
+    if (insertId) {
+        getLocationForPixel(pxNum, pyNum).then(locationName => {
+            try {
+                db.prepare('UPDATE pixel_events SET location_name = ? WHERE id = ?').run(locationName, insertId);
+                console.log(`   📍 Location: ${locationName}`);
+            } catch (e) {
+                // ignore update errors
+            }
+        }).catch(() => {
+            // ignore geocoding errors
+        });
+    }
 }
 
 function updateShardStats(event: any) {
     const { shardX, shardY, creator, mainWallet, timestamp } = event;
     const wallet = mainWallet.toBase58();
+    const shardXNum = Number(shardX);
+    const shardYNum = Number(shardY);
+    const timestampNum = timestamp.toNumber();
     
-    console.log(`[Shard] (${shardX},${shardY}) Init by ${wallet.slice(0, 8)}...`);
+    console.log(`[Shard] (${shardXNum},${shardYNum}) Init by ${wallet.slice(0, 8)}...`);
 
     try {
         db.prepare(`
             INSERT INTO shards (shard_x, shard_y, main_wallet, timestamp) 
             VALUES (?, ?, ?, ?)
-        `).run(shardX, shardY, wallet, timestamp.toNumber());
+        `).run(shardXNum, shardYNum, wallet, timestampNum);
 
         db.prepare('UPDATE global_stats SET total_shards_deployed = total_shards_deployed + 1 WHERE id = 1').run();
 
@@ -75,6 +99,20 @@ function updateShardStats(event: any) {
             ON CONFLICT(main_wallet) 
             DO UPDATE SET shards_owned_count = shards_owned_count + 1
         `).run(wallet);
+
+        // Async: Fetch location name for shard center and update (fire-and-forget)
+        getLocationForShard(shardXNum, shardYNum, SHARD_DIMENSION).then(locationName => {
+            try {
+                db.prepare('UPDATE shards SET location_name = ? WHERE shard_x = ? AND shard_y = ?')
+                    .run(locationName, shardXNum, shardYNum);
+                console.log(`   📍 Shard Location: ${locationName}`);
+            } catch (e) {
+                // ignore update errors
+            }
+        }).catch(() => {
+            // ignore geocoding errors
+        });
+
     } catch (e: any) {
         if (e.code === 'SQLITE_CONSTRAINT_PRIMARYKEY') {
             // Already indexed

@@ -4,6 +4,7 @@ import type { Map as LeafletMap } from 'leaflet';
 import * as L from 'leaflet';
 import { latLonToGlobalPx, globalPxToLatLon } from '../lib/projection';
 import { PIXEL_SELECT_ZOOM } from '../constants';
+import { getLocationName } from '../lib/reverse-geocode';
 
 // Crosshair SVG for pixel highlighter (corner brackets only)
 const CROSSHAIR_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" width="100%" height="100%">
@@ -18,6 +19,7 @@ export interface PixelData {
     py: number;
     color: number;
     timestamp: number;
+    locationName?: string; // Reverse geocoded location name (e.g., "Tokyo, Japan")
 }
 
 interface UseMapState {
@@ -88,7 +90,7 @@ export function useMap() {
         updateMarkerInternal(px, py, color);
         setPlacedPixelCount(pixelDataRef.current.size);
         
-        // Add to local pixels list
+        // Add to local pixels list (initially without location name)
         const pixelData: PixelData = {
             px,
             py,
@@ -98,6 +100,16 @@ export function useMap() {
         setLocalPixels(prev => {
             const filtered = prev.filter(p => !(p.px === px && p.py === py));
             return [pixelData, ...filtered].slice(0, 50);
+        });
+
+        // Reverse geocode to get location name and update the pixel
+        const { lat, lon } = globalPxToLatLon(px, py);
+        getLocationName(lat, lon).then(locationName => {
+            console.log(`📍 Pixel placed at (${px}, ${py}) - Location: ${locationName}`);
+            // Update the pixel with the location name
+            setLocalPixels(prev => prev.map(p => 
+                (p.px === px && p.py === py) ? { ...p, locationName } : p
+            ));
         });
     }, [updateMarkerInternal]);
 
@@ -366,7 +378,8 @@ export function useMap() {
         for (let i = 0; i < pixels.length; i += BATCH_SIZE) {
             const batch = pixels.slice(i, i + BATCH_SIZE);
             
-            batch.forEach(({ px, py, color, timestamp }) => {
+            batch.forEach((pixel) => {
+                const { px, py, color } = pixel;
                 const pixelKey = `${px},${py}`;
                 
                 // Skip erased pixels (color 0) - remove marker if it exists
@@ -396,6 +409,7 @@ export function useMap() {
             pixels.forEach(p => {
                 // Only add to recent list if it has a valid timestamp and is not erased
                 if (p.timestamp > 0 && p.color !== 0) {
+                    // Preserve full pixel object including locationName
                     newMap.set(`${p.px},${p.py}`, p);
                 } else if (p.color === 0) {
                     // Remove erased pixels from recent list
@@ -403,9 +417,23 @@ export function useMap() {
                 }
             });
 
-            return Array.from(newMap.values())
+            const result = Array.from(newMap.values())
                 .sort((a, b) => b.timestamp - a.timestamp)
                 .slice(0, 50);
+            
+            // Fetch missing location names for the first 10 pixels without them
+            result.slice(0, 10).forEach(pixel => {
+                if (!pixel.locationName && pixel.color !== 0) {
+                    const { lat, lon } = globalPxToLatLon(pixel.px, pixel.py);
+                    getLocationName(lat, lon).then(locationName => {
+                        setLocalPixels(current => current.map(p => 
+                            (p.px === pixel.px && p.py === pixel.py) ? { ...p, locationName } : p
+                        ));
+                    });
+                }
+            });
+
+            return result;
         });
     }, [updateMarkerInternal]);
 
