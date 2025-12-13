@@ -368,6 +368,18 @@ export function useMap() {
             
             batch.forEach(({ px, py, color, timestamp }) => {
                 const pixelKey = `${px},${py}`;
+                
+                // Skip erased pixels (color 0) - remove marker if it exists
+                if (color === 0) {
+                    const existingMarker = markersRef.current.get(pixelKey);
+                    if (existingMarker && mapRef.current) {
+                        mapRef.current.removeLayer(existingMarker);
+                        markersRef.current.delete(pixelKey);
+                    }
+                    pixelDataRef.current.delete(pixelKey);
+                    return;
+                }
+                
                 pixelDataRef.current.set(pixelKey, color);
                 
                 // Update or create marker
@@ -382,9 +394,12 @@ export function useMap() {
             const newMap = new Map(prev.map(p => [`${p.px},${p.py}`, p]));
             
             pixels.forEach(p => {
-                // Only add to recent list if it has a valid timestamp
-                if (p.timestamp > 0) {
+                // Only add to recent list if it has a valid timestamp and is not erased
+                if (p.timestamp > 0 && p.color !== 0) {
                     newMap.set(`${p.px},${p.py}`, p);
+                } else if (p.color === 0) {
+                    // Remove erased pixels from recent list
+                    newMap.delete(`${p.px},${p.py}`);
                 }
             });
 

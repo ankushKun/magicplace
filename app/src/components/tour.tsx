@@ -694,7 +694,7 @@ export default function Tour() {
                     title="Ready to Paint! 🎨"
                     description="Your cooldown is over."
                 >
-                    <Button onClick={() => actions.complete(TourItems.CooldownCompleted)} className="w-full">
+                    <Button onClick={() => actions.complete(TourItems.CooldownCompleted)} className="w-fit">
                         Let's Go!
                     </Button>
                 </TourDialogue>

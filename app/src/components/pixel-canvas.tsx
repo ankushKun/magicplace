@@ -1471,7 +1471,7 @@ export function PixelCanvas() {
                         {isToolbarExpanded && !isReadonly && (
                             <div className="p-4">
                                 {/* Two rows of 16 colors each */}
-                                <div className="grid grid-cols-8 sm:grid-cols-15 gap-1.5">
+                                <div className="grid grid-cols-8 sm:grid-cols-16 gap-1.5">
                                     {
                                         PRESET_COLORS.map((color) => {
                                             return <Color key={color} color={color} selected={selectedColor === color} onClick={() => setSelectedColor(color)} />

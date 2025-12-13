@@ -23,44 +23,55 @@ export const MAP_MOVE_THROTTLE_MS = 500;
 export const TRANSPARENT_COLOR = 'TRANSPARENT';
 
 // 8-bit color palette - 32 colors (indexes 1-32 in contract, 0 = transparent)
-// Expanded palette with more variety for creative expression
+// Organized as a smooth gradient following the color wheel
 export const PRESET_COLORS = [
-    // Row 1: Basic colors
-    '#000000', // 1: Black
-    '#FFFFFF', // 2: White
-    '#FF0000', // 3: Red
-    '#00FF00', // 4: Green
-    '#0000FF', // 5: Blue
-    '#FFFF00', // 6: Yellow
-    '#FF00FF', // 7: Magenta
-    '#00FFFF', // 8: Cyan
-    // Row 2: Warm colors
-    '#FF8000', // 9: Orange
-    '#FF4500', // 10: Red-Orange
-    '#FFD700', // 11: Gold
-    '#FFA500', // 12: Bright Orange
-    '#FF6347', // 13: Tomato
-    '#DC143C', // 14: Crimson
-    '#B22222', // 15: Firebrick
-    '#8B0000', // 16: Dark Red
-    // Row 3: Cool colors  
-    '#8000FF', // 17: Purple
-    '#4B0082', // 18: Indigo
-    '#6A5ACD', // 19: Slate Blue
-    '#00CED1', // 20: Dark Cyan
-    '#20B2AA', // 21: Light Sea Green
-    '#008B8B', // 22: Dark Cyan
-    '#006400', // 23: Dark Green
-    '#228B22', // 24: Forest Green
-    // Row 4: Pastels & neutrals
-    '#00FF80', // 25: Mint
-    '#FF0080', // 26: Pink
-    '#FF69B4', // 27: Hot Pink
-    '#DDA0DD', // 28: Plum
-    '#808080', // 29: Gray
-    '#A9A9A9', // 30: Dark Gray
-    '#804000', // 31: Brown
-    '#008080', // 32: Teal
+    // === Reds ===
+    '#FF0000', // 1: Pure Red
+    '#CC0000', // 2: Dark Red
+    '#FF3300', // 3: Red-Orange
+    
+    // === Oranges ===
+    '#FF6600', // 4: Orange
+    '#FF9900', // 5: Bright Orange
+    '#FFCC00', // 6: Gold/Amber
+    
+    // === Yellows ===
+    '#FFFF00', // 7: Yellow
+    '#CCFF00', // 8: Lime Yellow
+    
+    // === Greens ===
+    '#00FF00', // 9: Pure Green
+    '#00CC00', // 10: Grass Green
+    '#006600', // 11: Forest Green
+    '#00FF66', // 12: Spring Green
+    
+    // === Cyans ===
+    '#00FFCC', // 13: Aqua
+    '#00FFFF', // 14: Cyan
+    '#00CCCC', // 15: Teal
+    '#006666', // 16: Dark Teal
+    
+    // === Blues ===
+    '#0099FF', // 17: Sky Blue
+    '#0000FF', // 18: Pure Blue
+    '#0000CC', // 19: Dark Blue
+    
+    // === Purples & Pinks ===
+    '#6600FF', // 20: Purple
+    '#9933FF', // 21: Violet
+    '#FF00FF', // 22: Magenta
+    '#FF0099', // 23: Hot Pink
+    '#FF6699', // 24: Pink
+    
+    // === Neutrals & Earth Tones ===
+    '#FFFFFF', // 25: White
+    '#CCCCCC', // 26: Light Gray
+    '#888888', // 27: Medium Gray
+    '#444444', // 28: Dark Gray
+    '#000000', // 29: Black
+    '#FFCC99', // 30: Light Skin / Sand
+    '#CC9966', // 31: Tan / Brown
+    '#663300', // 32: Dark Brown
 ] as const;
 
 // Web Mercator projection limits

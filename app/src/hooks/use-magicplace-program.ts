@@ -484,13 +484,23 @@ export function useMagicplaceProgram() {
      * This returns all shards that exist on the ER
      */
     const getAllDelegatedShards = useCallback(async (): Promise<PixelShardAccount[]> => {
+        console.log("[getAllDelegatedShards] Starting fetch...");
         const targetProgram = erProgram || readOnlyErProgram;
-        if (!targetProgram) return [];
+        if (!targetProgram) {
+            console.log("[getAllDelegatedShards] No ER program available");
+            return [];
+        }
 
         try {
-            // Fetch all pixelShard accounts from the ER
-            // This is efficient because ER only contains active/delegated shards
+            console.log(`[getAllDelegatedShards] Program ID: ${targetProgram.programId.toBase58()}`);
             const accounts = await targetProgram.account.pixelShard.all();
+            console.log(`[getAllDelegatedShards] Found ${accounts.length} shards`);
+            
+            if (accounts.length > 0) {
+                accounts.forEach((a, i) => {
+                    console.log(`[getAllDelegatedShards] Shard ${i}: (${a.account.shardX}, ${a.account.shardY}) - ${a.account.pixels.length} bytes`);
+                });
+            }
             
             return accounts.map(a => ({
                 shardX: a.account.shardX,
@@ -500,7 +510,7 @@ export function useMagicplaceProgram() {
                 bump: a.account.bump,
             }));
         } catch (err) {
-            console.error("Failed to fetch all delegated shards:", err);
+            console.error("[getAllDelegatedShards] ERROR:", err);
             return [];
         }
     }, [erProgram, readOnlyErProgram]);
@@ -756,47 +766,66 @@ export function useMagicplaceProgram() {
      * Uses session key for signing - no wallet popup needed
      */
     const placePixelOnER = useCallback(async (px: number, py: number, color: number): Promise<string> => {
+        console.log(`[placePixelOnER] Starting: px=${px}, py=${py}, color=${color}`);
+        
         if (!sessionProgram || !sessionKey.keypair) {
+            console.error("[placePixelOnER] Session program or key not available");
             throw new Error("Session program or key not available");
         }
 
         if (color < 1 || color > 255) {
+            console.error(`[placePixelOnER] Invalid color: ${color}`);
             throw new Error(`Invalid color: ${color}. Must be 1-255`);
         }
 
         const { shardX, shardY } = getShardForPixel(px, py);
+        console.log(`[placePixelOnER] Shard: (${shardX}, ${shardY})`);
 
         setIsLoading(true);
         setError(null);
 
         try {
-            // Build instruction using session program for IDL
-            // We need the session PDA, which corresponds to the MAIN wallet.
-            // If the user is on ER w/ session logic, we assume `wallet.publicKey` is the main wallet.
-            // If wallet is not connected, we cannot easily derive the session PDA unless we stored it.
+            console.log("[placePixelOnER] Building instruction...");
             const placeIx = await sessionProgram.methods
                 .placePixel(shardX, shardY, px, py, color)
                 .accounts({
                     signer: sessionKey.keypair.publicKey,
-                    // session -> auto-derived from signer (session key)
                 })
                 .instruction();
+            console.log("[placePixelOnER] Instruction built successfully");
 
             const tx = new Transaction().add(placeIx);
-
-            // Set up for ER connection with session key
             tx.feePayer = sessionKey.keypair.publicKey;
-            tx.recentBlockhash = (await erConnection.getLatestBlockhash()).blockhash;
+            
+            console.log("[placePixelOnER] Getting latest blockhash...");
+            const { blockhash, lastValidBlockHeight } = await erConnection.getLatestBlockhash();
+            tx.recentBlockhash = blockhash;
+            console.log(`[placePixelOnER] Blockhash: ${blockhash}`);
+            
             tx.sign(sessionKey.keypair);
+            console.log("[placePixelOnER] Transaction signed");
 
-            // Send using raw connection
+            console.log("[placePixelOnER] Sending transaction...");
             const txHash = await erConnection.sendRawTransaction(tx.serialize(), {
                 skipPreflight: true,
             });
-            await erConnection.confirmTransaction(txHash, "confirmed");
+            console.log(`[placePixelOnER] Transaction sent: ${txHash}`);
 
+            console.log("[placePixelOnER] Waiting for confirmation...");
+            const confirmation = await erConnection.confirmTransaction(
+                { signature: txHash, blockhash, lastValidBlockHeight },
+                "confirmed"
+            );
+            
+            if (confirmation.value.err) {
+                console.error("[placePixelOnER] Transaction FAILED on-chain:", confirmation.value.err);
+                throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
+            }
+            
+            console.log(`[placePixelOnER] SUCCESS: ${txHash}`);
             return txHash;
         } catch (err) {
+            console.error("[placePixelOnER] ERROR:", err);
             const message = err instanceof Error ? err.message : "Failed to place pixel on ER";
             setError(message);
             throw err;
