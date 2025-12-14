@@ -1,0 +1,55 @@
+{
+  "packageId": "pixels_earth.ankush.one",
+  "host": "pixels.earth",
+  "name": "pixels.earth",
+  "launcherName": "pixels.earth",
+  "display": "standalone",
+  "themeColor": "#09090B",
+  "themeColorDark": "#000000",
+  "navigationColor": "#000000",
+  "navigationColorDark": "#000000",
+  "navigationDividerColor": "#000000",
+  "navigationDividerColorDark": "#000000",
+  "backgroundColor": "#09090B",
+  "enableNotifications": true,
+  "startUrl": "/",
+  "iconUrl": "https://pixels.earth/icon.png",
+  "maskableIconUrl": "https://pixels.earth/icon.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "/Users/weeblet/Developer/magicblock-test/magicplace/bubblewrap/android.keystore",
+    "alias": "solana-appstore"
+  },
+  "appVersionName": "1",
+  "appVersionCode": 1,
+  "shortcuts": [],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://pixels.earth/manifest.json",
+  "fallbackType": "customtabs",
+  "features": {
+    "locationDelegation": {
+      "enabled": true
+    }
+  },
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "fullScopeUrl": "https://pixels.earth/",
+  "minSdkVersion": 21,
+  "orientation": "any",
+  "fingerprints": [
+    {
+      "value": "D1:4C:03:1C:0B:B1:3F:C8:8F:DD:D7:C2:6A:C1:85:50:75:F9:77:37:93:C8:53:A0:97:98:AF:58:26:67:9C:15"
+    }
+  ],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": [],
+  "protocolHandlers": [],
+  "fileHandlers": [],
+  "launchHandlerClientMode": "",
+  "displayOverride": [],
+  "appVersion": "1"
+}

@@ -1,0 +1,25 @@
+# Gradle
+.gradle/
+build/
+app/build/
+
+# Signing keys - NEVER commit these
+android.keystore
+*.keystore
+*.jks
+
+# Build outputs
+*.apk
+*.aab
+*.idsig
+
+# Local config
+local.properties
+
+# IDE
+.idea/
+*.iml
+
+# OS files
+.DS_Store
+Thumbs.db

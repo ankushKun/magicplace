@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "pixels_earth.ankush.one",
+        "sha256_cert_fingerprints": ["D1:4C:03:1C:0B:B1:3F:C8:8F:DD:D7:C2:6A:C1:85:50:75:F9:77:37:93:C8:53:A0:97:98:AF:58:26:67:9C:15"]
+      }
+    }]
