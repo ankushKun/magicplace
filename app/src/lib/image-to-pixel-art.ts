@@ -230,17 +230,15 @@ function processImage(img: HTMLImageElement, maxSize: number, useDithering: bool
   previewCanvas.height = targetHeight * previewScale;
   const previewCtx = previewCanvas.getContext('2d')!;
   
-  // Draw each pixel as a colored square
+  // Draw each pixel as a colored square (skip transparent pixels for true transparency)
   for (let y = 0; y < targetHeight; y++) {
     for (let x = 0; x < targetWidth; x++) {
       const colorIndex = pixels[y]![x]!;
       if (colorIndex === 0) {
-        // Transparent - draw checkerboard pattern
-        const isLight = (x + y) % 2 === 0;
-        previewCtx.fillStyle = isLight ? '#e0e0e0' : '#c0c0c0';
-      } else {
-        previewCtx.fillStyle = PRESET_COLORS[colorIndex - 1]!;
+        // Transparent - don't draw anything, leave as transparent
+        continue;
       }
+      previewCtx.fillStyle = PRESET_COLORS[colorIndex - 1]!;
       previewCtx.fillRect(x * previewScale, y * previewScale, previewScale, previewScale);
     }
   }

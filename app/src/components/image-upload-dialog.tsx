@@ -153,15 +153,17 @@ export function ImageUploadDialog({
   // Calculate stats
   const pixelCount = pixelArt ? getPixelCount(pixelArt) : 0;
   
-  // Calculate estimated time (50 pixels per 30 seconds = ~1.67 pixels per second)
-  // But we can do burst of 50 pixels instantly, then wait 30s
-  const estimatedBursts = Math.ceil(pixelCount / 50);
-  const estimatedSeconds = estimatedBursts > 1 ? (estimatedBursts - 1) * 30 : 0;
-  const estimatedTimeStr = estimatedSeconds > 60 
+  // Calculate estimated time with bulk placement (50 pixels per transaction)
+  // On YOUR shard: ~700ms per batch (transaction + confirmation + 100ms delay)
+  // On OTHERS' shards: 30s cooldown between batches of 50
+  // Assume best case (own shard) for the estimate
+  const numBatches = Math.ceil(pixelCount / 50);
+  const estimatedSeconds = numBatches * 0.7; // ~700ms per batch
+  const estimatedTimeStr = estimatedSeconds >= 60 
     ? `~${Math.ceil(estimatedSeconds / 60)} min` 
-    : estimatedSeconds > 0 
-      ? `~${estimatedSeconds}s` 
-      : 'Instant';
+    : estimatedSeconds >= 1 
+      ? `~${Math.ceil(estimatedSeconds)}s` 
+      : pixelCount > 0 ? '<1s' : 'Instant';
 
   // Handle confirm
   const handleConfirm = () => {
