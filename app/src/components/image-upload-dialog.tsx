@@ -211,14 +211,16 @@ export function ImageUploadDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-4 py-4">
-          {/* File Drop Zone */}
+        <div className="space-y-4">
+          {/* Combined Drop Zone & Preview */}
           <div
             className={`
-              flex flex-col items-center justify-center rounded-md border border-dashed p-8 text-center animate-in fade-in zoom-in-95 duration-200
+              relative group flex flex-col items-center justify-center rounded-lg border-2 border-dashed text-center transition-all overflow-hidden min-h-[200px]
               ${isProcessing 
-                ? 'bg-muted opacity-50' 
-                : 'bg-muted/50 hover:bg-muted cursor-pointer'}
+                ? 'bg-muted border-muted-foreground/25' 
+                : pixelArt
+                  ? 'border-transparent bg-muted/30 p-0'
+                  : 'bg-muted/30 border-muted-foreground/25 hover:bg-muted/50 hover:border-primary/50 cursor-pointer'}
             `}
             onDrop={handleDrop}
             onDragOver={handleDragOver}
@@ -237,58 +239,109 @@ export function ImageUploadDialog({
             />
             
             {isProcessing ? (
-              <div className="flex flex-col items-center gap-2">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">Processing...</p>
+              <div className="flex flex-col items-center gap-3">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <p className="text-sm font-medium text-muted-foreground">Processing image...</p>
               </div>
-            ) : selectedFile ? (
-              <div className="flex flex-col items-center gap-2">
-                <div className="rounded-full bg-primary/10 p-2">
-                  <ImageIcon className="h-6 w-6 text-primary" />
+            ) : pixelArt ? (
+              <div className="relative w-full h-full flex items-center justify-center bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4IiBoZWlnaHQ9IjgiPjxyZWN0IHdpZHRoPSI4IiBoZWlnaHQ9IjgiIGZpbGw9IiNmZmYiLz48cGF0aCBkPSJNMCAwSDRWNEgwem00IDhINFY0aDR6IiBmaWxsPSIjZjNmNGY2Ii8+PC9zdmc+')]">
+                <img 
+                  src={pixelArt.previewDataUrl} 
+                  alt="Preview"
+                  className="max-h-[250px] w-auto object-contain image-rendering-pixelated shadow-sm"
+                  style={{ imageRendering: 'pixelated' }}
+                />
+                
+                {/* Hover Overlay */}
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer text-white">
+                  <ImageIcon className="h-8 w-8 mb-2" />
+                  <span className="font-medium text-sm">Click to change image</span>
+                  <span className="text-xs text-white/70 mt-1">or drag & drop</span>
                 </div>
-                <div className="text-sm font-medium">{selectedFile.name}</div>
-                <div className="text-xs text-muted-foreground">Click to replace</div>
+
+                {/* File Name Badge */}
+                <div className="absolute bottom-2 left-2 right-2 flex justify-center pointer-events-none group-hover:opacity-0 transition-opacity">
+                   <div className="bg-black/50 backdrop-blur-sm p-0 px-1 rounded text-xs text-white truncate max-w-[90%]">
+                     {selectedFile?.name}
+                   </div>
+                </div>
               </div>
             ) : (
-              <div className="flex flex-col items-center gap-2">
-                <div className="rounded-full bg-muted p-2">
-                  <Upload className="h-6 w-6 text-muted-foreground" />
+              <div className="flex flex-col items-center gap-4 py-8">
+                <div className="rounded-full bg-primary/10 p-4">
+                  <Upload className="h-8 w-8 text-primary" />
                 </div>
-                <div className="text-sm font-medium">Click to upload</div>
-                <div className="text-xs text-muted-foreground">or drag and drop</div>
+                <div className="space-y-1">
+                  <p className="font-semibold">Click to upload</p>
+                  <p className="text-sm text-muted-foreground">or drag and drop</p>
+                </div>
+                <div className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
+                   PNG, JPG, GIF up to 10MB
+                </div>
               </div>
             )}
           </div>
 
-          {/* Settings */}
+          {/* Settings & Stats */}
           <div className="space-y-4">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label>Size</Label>
-                <span className="text-sm text-muted-foreground">{maxSize}px</span>
-              </div>
-              <Slider
-                min={MIN_SIZE}
-                max={MAX_SIZE}
-                step={4}
-                value={[maxSize]}
-                onValueChange={(values) => setMaxSize(values[0] ?? MIN_SIZE)}
-                disabled={isProcessing || !selectedFile}
-              />
-            </div>
+            <div className="flex gap-4">
+               {/* Size Slider (Larger) */}
+               <div className="flex-1 space-y-2">
+                 <div className="flex items-center justify-between">
+                   <Label>Target Size</Label>
+                   <span className="text-sm font-mono text-muted-foreground">{maxSize}px</span>
+                 </div>
+                 <Slider
+                   min={MIN_SIZE}
+                   max={MAX_SIZE}
+                   step={4}
+                   value={[maxSize]}
+                   onValueChange={(values) => setMaxSize(values[0] ?? MIN_SIZE)}
+                   disabled={isProcessing || !selectedFile}
+                 />
+               </div>
 
-            <div className="flex items-center justify-between">
-              <Label>Dithering</Label>
-              <Button
-                variant={useDithering ? "default" : "outline"}
-                size="sm"
-                onClick={() => setUseDithering(!useDithering)}
-                disabled={isProcessing}
-                className="h-7 text-xs"
-              >
-                {useDithering ? 'On' : 'Off'}
-              </Button>
+               {/* Dithering Toggle (Compact) */}
+               <div className="space-y-2">
+                  <Label>Dithering</Label>
+                  <Button
+                    variant={useDithering ? "default" : "secondary"}
+                    size="sm"
+                    onClick={() => setUseDithering(!useDithering)}
+                    disabled={isProcessing}
+                    className="w-full text-xs"
+                  >
+                    {useDithering ? 'Enabled' : 'Disabled'}
+                  </Button>
+               </div>
             </div>
+            
+            {/* Stats Row */}
+            {pixelArt && (
+              <div className="rounded-md bg-muted/40 p-3 grid grid-cols-2 gap-4 text-sm animate-in fade-in slide-in-from-top-2">
+                 <div className="flex flex-col gap-1">
+                    <span className="text-xs text-muted-foreground uppercase tracking-wider">Pixels</span>
+                    <span className="font-medium">{getPixelCount(pixelArt)}</span>
+                 </div>
+                 <div className="flex flex-col gap-1">
+                    <span className="text-xs text-muted-foreground uppercase tracking-wider">Est. Time</span>
+                    <span className="font-medium text-primary">{estimatedTimeStr}</span>
+                 </div>
+                 <div className="col-span-2 flex flex-col gap-1 border-t pt-2">
+                    <span className="text-xs text-muted-foreground uppercase tracking-wider">Palette</span>
+                    <div className="flex flex-wrap gap-1">
+                      {getUsedColors(pixelArt).map((colorIndex) => (
+                        <div
+                          key={colorIndex}
+                          className="h-3 w-3 rounded-[1px] shadow-sm ring-1 ring-black/5"
+                          style={{ backgroundColor: PRESET_COLORS[colorIndex - 1] }}
+                          title={PRESET_COLORS[colorIndex - 1]}
+                        />
+                      ))}
+                    </div>
+                 </div>
+              </div>
+            )}
           </div>
 
           {/* Error Message */}
@@ -307,41 +360,6 @@ export function ImageUploadDialog({
                 {nsfwBlocked && <span className="font-medium">Content Blocked</span>}
                 <span>{error}</span>
               </div>
-            </div>
-          )}
-
-          {/* Preview */}
-          {pixelArt && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <Label>Preview</Label>
-                <div className="flex gap-2 text-xs text-muted-foreground">
-                  <span>{getPixelCount(pixelArt)} pixels</span>
-                  <span>•</span>
-                  <span>{estimatedTimeStr}</span>
-                </div>
-              </div>
-              
-              <div className="flex items-center justify-center rounded-md border bg-muted/50 p-4">
-                <img 
-                  src={pixelArt.previewDataUrl} 
-                  alt="Preview"
-                  className="max-h-[200px] object-contain image-rendering-pixelated"
-                  style={{ imageRendering: 'pixelated' }}
-                />
-              </div>
-
-               {/* Colors */}
-               <div className="flex flex-wrap gap-1">
-                  {getUsedColors(pixelArt).map((colorIndex) => (
-                    <div
-                      key={colorIndex}
-                      className="h-4 w-4 rounded-[2px] border ring-offset-background"
-                      style={{ backgroundColor: PRESET_COLORS[colorIndex - 1] }}
-                      title={PRESET_COLORS[colorIndex - 1]}
-                    />
-                  ))}
-                </div>
             </div>
           )}
         </div>
