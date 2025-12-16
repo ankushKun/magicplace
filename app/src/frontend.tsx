@@ -9,6 +9,10 @@
 // This ensures Buffer is available before any other modules load
 import "./polyfills";
 
+// Register Mobile Wallet Adapter for mobile web/PWA support
+// This enables connection to wallets like Phantom, Solflare on mobile devices
+import "./lib/register-mwa";
+
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { WalletProvider } from "./providers/wallet-provider";
