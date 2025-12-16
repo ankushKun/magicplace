@@ -117,7 +117,8 @@ if (existsSync(outdir)) {
 
 const start = performance.now();
 
-const entrypoints = [...new Bun.Glob("**.html").scanSync("src")]
+// Find main HTML entry points (excludes pages directory - those are static)
+const entrypoints = [...new Bun.Glob("*.html").scanSync("src")]
   .map(a => path.resolve("src", a))
   .filter(dir => !dir.includes("node_modules"));
 console.log(`📄 Found ${entrypoints.length} HTML ${entrypoints.length === 1 ? "file" : "files"} to process\n`);
@@ -139,11 +140,21 @@ const result = await Bun.build({
 console.log("📂 Copying public assets...");
 const publicDir = path.resolve("public");
 if (existsSync(publicDir)) {
-    // Recursive copy using Bun's shell or node fs
-    // Using simple cp command for simplicity in this environment
-    // Note: Bun's shell is cross-platform enough for this standard usage usually, but let's use fs for safety if we can, or just cp -r
-    // Since we are in bun, we can use Shell
-    const { stdout, stderr } = Bun.spawnSync(["cp", "-R", "public/.", outdir]);
+    Bun.spawnSync(["cp", "-R", "public/.", outdir]);
+}
+
+// Copy static HTML pages (legal pages, etc.) to output directory
+// These are pure HTML without JS bundling, served at their route paths
+console.log("📄 Copying static pages...");
+const pagesDir = path.resolve("src/pages");
+if (existsSync(pagesDir)) {
+    const staticPages = [...new Bun.Glob("*.html").scanSync(pagesDir)];
+    for (const page of staticPages) {
+        const srcPath = path.join(pagesDir, page);
+        const destPath = path.join(outdir, page);
+        await Bun.write(destPath, Bun.file(srcPath));
+        console.log(`  ✓ ${page}`);
+    }
 }
 
 // Fix manifest.json path in built HTML files
